@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>대학전쟁: 블록 오목 (Pure AI Final)</title>
+    <title>대학전쟁: 블록 오목 (Math AI)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; background: #dfe4ea; font-family: 'Pretendard', sans-serif; user-select: none; -webkit-touch-callout: none; }
@@ -45,7 +45,7 @@
 <body>
     <div id="lobby-overlay">
         <div class="lobby-box">
-            <div class="lobby-title">🎲 블록 오목 <span style="font-size:1rem; color:#e74c3c;">(Pure AI)</span></div>
+            <div class="lobby-title">🎲 블록 오목 <span style="font-size:1rem; color:#e74c3c;">(Math AI)</span></div>
             <div id="lobby-main">
                 <button class="lobby-btn btn-single" onclick="startSingleGame()">👤 싱글 / AI 연습</button>
                 <div style="margin: 20px 0; border-top: 1px solid #eee;"></div>
@@ -101,6 +101,7 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
+        // Firebase Config
         const firebaseConfig = {
             apiKey: "AIzaSyC6I8D1aazjTGBJdwQ1iHsQYyHXWHf3_PU",
             authDomain: "omok-game-95008.firebaseapp.com",
@@ -118,68 +119,12 @@
         let myPlayerNum = 0; 
         let isOnline = false;
 
-        // Neural Network AI (The Brain)
-        class NeuralAI {
-            constructor() { this.weights = null; this.ready = false; }
-            async load() {
-                try {
-                    const res = await fetch('./legendary_ai.json');
-                    if (!res.ok) throw new Error("File not found");
-                    this.weights = await res.json();
-                    this.ready = true;
-                    console.log("🧠 512-Neuron AI Ready");
-                } catch (e) {
-                    console.error("AI load failed:", e);
-                    log("⚠️ AI 파일 로드 실패");
-                }
-            }
-            predict(board, player) {
-                if (!this.ready) return null;
-                
-                // [핵심] Perspective Swap
-                // AI는 자기가 항상 '1'이라고 생각하고 학습함.
-                // 따라서 AI가 2번 플레이어라면, 2를 1로, 1을 2로 바꿔서 보여줘야 함.
-                let input = [];
-                for (let z=0; z<5; z++) {
-                    for (let y=0; y<5; y++) {
-                        for (let x=0; x<5; x++) {
-                            let val = board[z][y][x];
-                            if (player === 2) { // AI is Player 2
-                                if (val === 1) val = 2; // Opponent becomes 2
-                                else if (val === 2) val = 1; // Me becomes 1
-                            }
-                            input.push(val);
-                        }
-                    }
-                }
-
-                let h1 = this.matMul(input, this.weights.fc0_w, this.weights.fc0_b).map(x => Math.max(0, x));
-                let h2 = this.matMul(h1, this.weights.fc1_w, this.weights.fc1_b).map(x => Math.max(0, x));
-                return this.matMul(h2, this.weights.fc2_w, this.weights.fc2_b);
-            }
-            matMul(input, W, b) {
-                let res = new Array(b.length).fill(0);
-                for (let i = 0; i < b.length; i++) {
-                    let sum = 0;
-                    for (let j = 0; j < input.length; j++) sum += input[j] * W[i][j];
-                    res[i] = sum + b[i];
-                }
-                return res;
-            }
-        }
-
         const SHAPES = [
             [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:1,z:0}], [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:-1,z:0}],
             [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:-1,z:0}], [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:1,z:0}],
             [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:1,y:0,z:1}], [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:-1,y:0,z:1}],
             [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:0,y:1,z:1}], [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:0,y:-1,z:1}]
         ];
-
-        function decodeAction(actionId) {
-            const shapeIdx = actionId % 8;
-            const posIdx = Math.floor(actionId / 8);
-            return { x: posIdx % 5, y: Math.floor(posIdx / 5), shapeIdx };
-        }
 
         class GameLogic {
             constructor() { this.reset(); }
@@ -189,6 +134,11 @@
                 this.blocksLeft = { 1: 4, 2: 4 }; this.phase = 'PLACEMENT'; this.winner = 0;
                 this.initFixedBlocks(); this.aiMode = false;
                 this.selectedBlock = null; this.selectedBlockOriginalCells = null;
+            }
+            clone() {
+                const n = new GameLogic();
+                n.deserialize(JSON.parse(JSON.stringify(this.serialize())));
+                return n;
             }
             serialize() { return { board: this.board, blocks: this.blocks, turnCount: this.turnCount, currentPlayer: this.currentPlayer, blocksLeft: this.blocksLeft, phase: this.phase, winner: this.winner }; }
             deserialize(data) { Object.assign(this, data); }
@@ -283,28 +233,18 @@
                 sendMove();
                 return this.winner;
             }
-            // [승리 판정 로직 강화]
             checkWin() {
                 const topMap = Array.from({length: 5}, () => Array(5).fill(0));
-                for(let y=0; y<5; y++) for(let x=0; x<5; x++) {
-                    for(let z=4; z>=0; z--) {
-                        if(this.board[z][y][x] !== 0) {
-                            topMap[y][x] = this.board[z][y][x];
-                            break;
-                        }
-                    }
-                }
+                for(let y=0; y<5; y++) for(let x=0; x<5; x++) for(let z=4; z>=0; z--) if(this.board[z][y][x]!==0) { topMap[y][x]=this.board[z][y][x]; break; }
                 const dirs = [{dx:1, dy:0}, {dx:0, dy:1}, {dx:1, dy:1}, {dx:1, dy:-1}];
                 for(let y=0; y<5; y++) for(let x=0; x<5; x++) {
-                    let c = topMap[y][x]; 
-                    if(c===0) continue;
+                    let c = topMap[y][x]; if(c===0) continue;
                     for(let d of dirs) {
-                        let cnt=1; 
-                        for(let k=1; k<5; k++) {
+                        let cnt=1; for(let k=1; k<5; k++) {
                             let nx=x+d.dx*k, ny=y+d.dy*k;
-                            if(nx>=0 && nx<5 && ny>=0 && ny<5 && topMap[ny][nx]===c) cnt++; else break;
+                            if(nx>=0&&nx<5&&ny>=0&&ny<5&&topMap[ny][nx]===c) cnt++; else break;
                         }
-                        if(cnt===5) return c; // 승리
+                        if(cnt===5) return c;
                     }
                 }
                 return 0;
@@ -314,79 +254,60 @@
         }
 
         // =========================================================
-        // 🧠 AI Search Logic (Masking & Parsing)
+        // 🧠 Math AI (Heuristic Minimax) - No JSON needed
         // =========================================================
         async function getAIMove() {
-            if (!ai.ready) { log("🧠 AI 준비 중..."); return null; }
             aiLoader.style.display = 'block';
+            
+            // Allow UI to render loader
+            await new Promise(r => setTimeout(r, 50));
 
-            // 1. AI에게 점수표 받기 (Perspective Swapped)
-            const scores = ai.predict(logic.board, logic.currentPlayer);
-            if (!scores) return null;
+            const player = logic.currentPlayer;
+            const validMoves = getAllValidMoves(logic, player);
+            
+            if (validMoves.length === 0) { aiLoader.style.display='none'; return null; }
 
-            // 2. 점수 높은 순으로 200개 다 줄세우기
-            const candidates = scores.map((val, idx) => ({ idx, val })).sort((a, b) => b.val - a.val);
-
-            let bestMove = null;
-
-            if (logic.phase === 'PLACEMENT') {
-                // 후보군을 1등부터 차례대로 검사 (규칙에 맞는 첫 번째가 최고의 수)
-                for (let c of candidates) {
-                    const {x, y, shapeIdx} = decodeAction(c.idx);
-                    const sh = SHAPES[shapeIdx];
-                    const cells = sh.map(d => ({x: x+d.x, y: y+d.y, z: d.z}));
-                    
-                    if (logic.checkValidity(logic.currentPlayer, cells).ok) {
-                        bestMove = { type: 'place', cells, shapeIdx };
-                        console.log(`AI Choice (Place): Score ${c.val.toFixed(2)} at (${x},${y})`);
-                        break; // 유효한 수 중 점수가 제일 높은 것이므로 바로 채택
-                    }
-                }
-            } else {
-                // Movement Phase: Target 위치가 정해지면, 그걸 수행할 수 있는 Source 블록 찾기
-                const myBlocks = logic.blocks.filter(b => b.player === logic.currentPlayer && !b.isFixed);
-                
-                for (let c of candidates) {
-                    const {x, y, shapeIdx} = decodeAction(c.idx);
-                    const sh = SHAPES[shapeIdx];
-                    const targetCells = sh.map(d => ({x: x+d.x, y: y+d.y, z: d.z}));
-
-                    // 내 블록들을 하나씩 대입해서 이 Target 모양이 가능한지 확인
-                    for (let b of myBlocks) {
-                        if (!logic.canPick(b)) continue;
-                        const originalCells = JSON.parse(JSON.stringify(b.cells));
-                        logic.removeBlock(b.id); 
-                        
-                        if (logic.checkValidity(logic.currentPlayer, targetCells, true, originalCells).ok) {
-                            // 찾았다!
-                            bestMove = { type: 'move', fromId: b.id, cells: targetCells, shapeIdx };
-                            console.log(`AI Choice (Move): Score ${c.val.toFixed(2)} from ID:${b.id} to (${x},${y})`);
-                            
-                            // 복구
-                            logic.addBlock(logic.currentPlayer, originalCells, b.shapeIdx, false);
-                            logic.blocks[logic.blocks.length-1].id = b.id; 
-                            break;
-                        }
-                        // 복구
-                        logic.addBlock(logic.currentPlayer, originalCells, b.shapeIdx, false);
-                        logic.blocks[logic.blocks.length-1].id = b.id; 
-                    }
-                    if (bestMove) break;
+            // 1. Instant Win Check
+            for (let move of validMoves) {
+                const simLogic = logic.clone();
+                applyMove(simLogic, move, player);
+                if (simLogic.checkWin() === player) {
+                    aiLoader.style.display='none';
+                    return move;
                 }
             }
 
-            // Fallback: 70만번 학습했으면 여기 걸릴 리 없지만, 만약의 경우를 대비한 랜덤
-            if (!bestMove) {
-                console.warn("AI Fallback! (Random)");
-                if (logic.phase === 'PLACEMENT') {
-                    for(let i=0; i<200; i++) {
-                        const {x,y,shapeIdx} = decodeAction(i);
-                        const sh=SHAPES[shapeIdx];
-                        const cells=sh.map(d=>({x:x+d.x, y:y+d.y, z:d.z}));
-                        if(logic.checkValidity(logic.currentPlayer, cells).ok) { bestMove={type:'place',cells,shapeIdx}; break; }
-                    }
-                } else {
-                    // Random Move not implemented fully for brevity, but main AI should work.
+            // 2. Block Instant Loss Check
+            const opponent = player === 1 ? 2 : 1;
+            const oppMoves = getAllValidMoves(logic, opponent);
+            for (let move of oppMoves) {
+                const simLogic = logic.clone();
+                applyMove(simLogic, move, opponent);
+                if (simLogic.checkWin() === opponent) {
+                    // We must block this! Find a move that occupies one of the winning cells or changes board state
+                    // Simple heuristic: If opp can win, playing that move ourselves (if valid) is usually a good block
+                    // But in Block Omok, we might block by placing elsewhere.
+                    // Better approach: Evaluate current valid moves to see which one creates best state.
+                }
+            }
+
+            // 3. Heuristic Score Evaluation
+            let bestMove = null;
+            let maxScore = -Infinity;
+
+            // Sort moves by simple heuristic to optimize
+            // Random shuffle to add variety if scores are equal
+            validMoves.sort(() => 0.5 - Math.random());
+
+            for (let move of validMoves) {
+                const simLogic = logic.clone();
+                applyMove(simLogic, move, player);
+                
+                // Evaluate board state
+                const score = evaluateBoard(simLogic, player);
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestMove = move;
                 }
             }
 
@@ -394,8 +315,104 @@
             return bestMove;
         }
 
-        // ... Setup ...
-        const ai = new NeuralAI(); ai.load();
+        function getAllValidMoves(gameLogic, player) {
+            const moves = [];
+            if (gameLogic.blocksLeft[player] > 0) {
+                for (let x=0; x<5; x++) for (let y=0; y<5; y++) for (let s=0; s<8; s++) {
+                    const sh = SHAPES[s];
+                    const cells = sh.map(d => ({x: x+d.x, y: y+d.y, z: d.z}));
+                    if (gameLogic.checkValidity(player, cells).ok) {
+                        moves.push({ type:'place', cells, shapeIdx: s });
+                    }
+                }
+            } else {
+                const myBlocks = gameLogic.blocks.filter(b => b.player === player && !b.isFixed);
+                for (let b of myBlocks) {
+                    if (!gameLogic.canPick(b)) continue;
+                    const originalCells = JSON.parse(JSON.stringify(b.cells));
+                    gameLogic.removeBlock(b.id); 
+                    for (let x=0; x<5; x++) for (let y=0; y<5; y++) for (let s=0; s<8; s++) {
+                        const sh = SHAPES[s];
+                        const cells = sh.map(d => ({x: x+d.x, y: y+d.y, z: d.z}));
+                        if (gameLogic.checkValidity(player, cells, true, originalCells).ok) {
+                            moves.push({ type:'move', fromId: b.id, cells, shapeIdx: s });
+                        }
+                    }
+                    gameLogic.addBlock(player, originalCells, b.shapeIdx, false); 
+                    gameLogic.blocks[gameLogic.blocks.length-1].id = b.id; 
+                }
+            }
+            return moves;
+        }
+
+        function applyMove(gameLogic, move, player) {
+            if (move.type === 'place') {
+                gameLogic.addBlock(player, move.cells, move.shapeIdx);
+                gameLogic.blocksLeft[player]--;
+            } else {
+                const b = gameLogic.blocks.find(x => x.id === move.fromId);
+                if(b) {
+                    gameLogic.removeBlock(b.id);
+                    gameLogic.addBlock(player, move.cells, move.shapeIdx);
+                }
+            }
+        }
+
+        function evaluateBoard(gameLogic, player) {
+            // Simple Heuristic:
+            // 4-in-row (open): 10000
+            // 3-in-row (open): 1000
+            // 2-in-row (open): 100
+            // Height bonus: +10 per z
+            // Central bonus: +5
+            
+            let score = 0;
+            const opponent = player === 1 ? 2 : 1;
+            
+            // Check Win (Highest Priority)
+            const winner = gameLogic.checkWin();
+            if (winner === player) return 100000;
+            if (winner === opponent) return -100000;
+
+            // Generate Top Map
+            const topMap = Array.from({length: 5}, () => Array(5).fill(0));
+            for(let y=0; y<5; y++) for(let x=0; x<5; x++) for(let z=4; z>=0; z--) if(gameLogic.board[z][y][x]!==0) { topMap[y][x]=gameLogic.board[z][y][x]; break; }
+
+            // Analyze Lines
+            const dirs = [{dx:1, dy:0}, {dx:0, dy:1}, {dx:1, dy:1}, {dx:1, dy:-1}];
+            
+            // My Score
+            score += countLines(topMap, player, dirs);
+            // Opponent Score (Subtract heavily to block)
+            score -= countLines(topMap, opponent, dirs) * 1.5; // Defensive play
+
+            return score;
+        }
+
+        function countLines(map, color, dirs) {
+            let score = 0;
+            for(let y=0; y<5; y++) for(let x=0; x<5; x++) {
+                if(map[y][x] !== color) continue;
+                for(let d of dirs) {
+                    let cnt = 1;
+                    let blocked = false;
+                    for(let k=1; k<5; k++) {
+                        let nx=x+d.dx*k, ny=y+d.dy*k;
+                        if(nx<0||nx>=5||ny<0||ny>=5) { blocked=true; break; } // Wall
+                        if(map[ny][nx] === color) cnt++;
+                        else if(map[ny][nx] !== 0) { blocked=true; break; } // Opponent
+                        else break; // Empty
+                    }
+                    
+                    if (cnt === 4 && !blocked) score += 5000;
+                    else if (cnt === 3 && !blocked) score += 500;
+                    else if (cnt === 2 && !blocked) score += 50;
+                }
+            }
+            return score;
+        }
+
+        // ... View ...
         const logic = new GameLogic();
         const logEl = document.getElementById('log-console');
         const aiLoader = document.getElementById('ai-loader');
@@ -534,10 +551,7 @@
                 if (snap.val()) {
                     logic.deserialize(snap.val());
                     renderBoard(); updateUI();
-                    // [중요] 비동기 승리 체크
-                    setTimeout(() => {
-                        if(logic.winner!==0) alert(`게임 종료! Player ${logic.winner} 승리!`);
-                    }, 200);
+                    setTimeout(() => { if(logic.winner!==0) alert(`게임 종료! Player ${logic.winner} 승리!`); }, 200);
                 }
             });
         }
@@ -573,10 +587,7 @@
                     }
                 }
                 log("AI 착수 완료"); renderBoard(); updateUI(); updateGhost();
-                // AI 승리 체크
-                setTimeout(() => {
-                    if(logic.winner!==0) alert(`게임 종료! Player ${logic.winner} 승리!`);
-                }, 200);
+                setTimeout(() => { if(logic.winner!==0) alert(`게임 종료! Player ${logic.winner} 승리!`); }, 200);
             } else {
                 log("AI 기권 (둘 곳 없음)");
             }
@@ -641,10 +652,7 @@
                 if(chk.ok) {
                     logic.confirmMove(cells, currentShapeIdx%8);
                     log("착수 완료"); renderBoard(); updateUI(); updateGhost();
-                    // 사용자 승리 체크 (타이밍 이슈 해결)
-                    setTimeout(() => {
-                        if(logic.winner!==0) alert(`게임 종료! Player ${logic.winner} 승리!`);
-                    }, 200);
+                    setTimeout(() => { if(logic.winner!==0) alert(`게임 종료! Player ${logic.winner} 승리!`); }, 200);
                 } else log(chk.msg);
             }
         }
