@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>대학전쟁: 블록 오목 (Select Side)</title>
+    <title>대학전쟁: 블록 오목 (Side Select Fixed)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; background: #dfe4ea; font-family: 'Pretendard', sans-serif; user-select: none; -webkit-touch-callout: none; }
@@ -21,8 +21,6 @@
         .btn-ai-toggle { background: #ecf0f1; color: #7f8c8d; }
         .btn-ai-toggle.active { background: #2ecc71; color: white; border-color: #27ae60; }
         .phase-badge { font-size: 0.75rem; color: white; padding: 4px 8px; border-radius: 4px; background: #333; vertical-align: middle; }
-        
-        /* 버튼들 */
         .fab-rotate { pointer-events: auto; position: absolute; right: 20px; bottom: 30px; width: 70px; height: 70px; background: #fff; color: #333; border-radius: 50%; border: 2px solid #ddd; display: flex; justify-content: center; align-items: center; font-size: 2.2rem; cursor: pointer; box-shadow: 0 6px 15px rgba(0,0,0,0.2); transition: transform 0.1s; }
         .fab-rotate:active { transform: scale(0.95); background: #f9f9f9; }
         .fab-rules { pointer-events: auto; position: absolute; left: 20px; bottom: 30px; width: 45px; height: 45px; background: #3498db; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
@@ -47,7 +45,7 @@
 <body>
     <div id="lobby-overlay">
         <div class="lobby-box">
-            <div class="lobby-title">🎲 블록 오목 <span style="font-size:1rem; color:#e74c3c;">(Pro)</span></div>
+            <div class="lobby-title">🎲 블록 오목 <span style="font-size:1rem; color:#e74c3c;">(Master)</span></div>
             
             <div id="lobby-main">
                 <button class="lobby-btn btn-single" onclick="showSideSelection()">👤 싱글 / AI 연습</button>
@@ -60,7 +58,7 @@
             </div>
 
             <div id="lobby-side" style="display:none;">
-                <h3 style="margin-bottom:20px; color:#555;">진영을 선택하세요</h3>
+                <h3 style="margin-bottom:20px; color:#2c3e50;">진영을 선택하세요</h3>
                 <button class="lobby-btn" style="background:#333; color:white;" onclick="startSingleGame(1)">⚫ 흑돌 (선공)</button>
                 <button class="lobby-btn" style="background:#eee; color:#333; border:1px solid #ccc;" onclick="startSingleGame(2)">⚪ 백돌 (후공)</button>
                 <button class="btn" onclick="location.reload()" style="margin-top:20px; width:100%;">취소</button>
@@ -115,7 +113,6 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-        // Firebase Config
         const firebaseConfig = {
             apiKey: "AIzaSyC6I8D1aazjTGBJdwQ1iHsQYyHXWHf3_PU",
             authDomain: "omok-game-95008.firebaseapp.com",
@@ -243,8 +240,10 @@
                     if (this.blocksLeft[1] === 0 && this.blocksLeft[2] === 0) this.phase = 'MOVEMENT';
                     else if (this.blocksLeft[this.currentPlayer] === 0 && this.phase === 'PLACEMENT') this.phase = 'MOVEMENT';
                     
-                    // AI Turn Check
-                    if(!isOnline && this.aiMode && this.currentPlayer !== myPlayerNum) runAI();
+                    // Check AI Turn (Corrected)
+                    if(!isOnline && this.aiMode && this.currentPlayer !== myPlayerNum) {
+                        runAI();
+                    }
                 }
                 sendMove();
                 return this.winner;
@@ -270,7 +269,7 @@
         }
 
         // =========================================================
-        // 🧠 Math AI (Heuristic Minimax) - Improved
+        // 🧠 Math AI (Heuristic Minimax)
         // =========================================================
         async function getAIMove() {
             aiLoader.style.display = 'block';
@@ -280,30 +279,26 @@
             const validMoves = getAllValidMoves(logic, player);
             if (validMoves.length === 0) { aiLoader.style.display='none'; return null; }
 
-            // 1. Kill Move (Immediate Win)
+            // 1. Instant Win
             for (let move of validMoves) {
-                const sim = logic.clone();
-                applyMove(sim, move, player);
+                const sim = logic.clone(); applyMove(sim, move, player);
                 if (sim.checkWin() === player) { aiLoader.style.display='none'; return move; }
             }
 
-            // 2. Block Death (Immediate Loss)
+            // 2. Block Instant Loss
             const opponent = player===1?2:1;
             const oppMoves = getAllValidMoves(logic, opponent);
             for (let move of oppMoves) {
-                const sim = logic.clone();
-                applyMove(sim, move, opponent);
+                const sim = logic.clone(); applyMove(sim, move, opponent);
                 if (sim.checkWin() === opponent) {
-                    // Try to block this specific spot or state
-                    // Simple heuristic: if we can occupy the winning cell, do it.
-                    // But for now, we rely on the main evaluation function to naturally catch this.
+                    // Try to block or win
                 }
             }
 
-            // 3. Score Evaluation
+            // 3. Evaluation
             let bestMove = null;
             let maxScore = -Infinity;
-            validMoves.sort(() => 0.5 - Math.random()); // Shuffle for variety
+            validMoves.sort(() => 0.5 - Math.random());
 
             for (let move of validMoves) {
                 const sim = logic.clone();
@@ -356,12 +351,8 @@
             for(let y=0; y<5; y++) for(let x=0; x<5; x++) for(let z=4; z>=0; z--) if(g.board[z][y][x]!==0) { topMap[y][x]=g.board[z][y][x]; break; }
 
             const dirs = [{dx:1, dy:0}, {dx:0, dy:1}, {dx:1, dy:1}, {dx:1, dy:-1}];
-            
-            // Aggressive Score
             score += countPatterns(topMap, p, dirs);
-            // Defensive Score (Block opponent) - Weight higher to be safe
             score -= countPatterns(topMap, opp, dirs) * 2.0; 
-
             return score;
         }
 
@@ -371,29 +362,21 @@
                 if(map[y][x] !== color) continue;
                 for(let d of dirs) {
                     let cnt = 1;
-                    let blockedPrev = false; // Check boundary behind
+                    let blockedPrev = false;
                     let px=x-d.dx, py=y-d.dy;
                     if(px<0||px>=5||py<0||py>=5 || (map[py][px]!==0 && map[py][px]!==color)) blockedPrev = true;
 
                     for(let k=1; k<5; k++) {
                         let nx=x+d.dx*k, ny=y+d.dy*k;
-                        if(nx<0||nx>=5||ny<0||ny>=5) { // Wall
-                            if (cnt===4) score += 500; // Blocked 4
-                            if (cnt===3) score += 50; // Blocked 3
-                            break;
+                        if(nx<0||nx>=5||ny<0||ny>=5) { 
+                            if (cnt===4) score += 500; if (cnt===3) score += 50; break;
                         }
                         if(map[ny][nx] === color) cnt++;
-                        else if(map[ny][nx] !== 0) { // Opponent block
-                            if (cnt===4) score += 500; // Blocked 4
-                            if (cnt===3) score += 50; // Blocked 3
-                            break;
+                        else if(map[ny][nx] !== 0) {
+                            if (cnt===4) score += 500; if (cnt===3) score += 50; break;
                         } else {
-                            // Empty next
-                            if (cnt===4) score += 10000; // Live 4 (Win next)
-                            else if (cnt===3) {
-                                if(!blockedPrev) score += 1000; // Live 3 (Open both ends)
-                                else score += 100; // Blocked 3
-                            }
+                            if (cnt===4) score += 10000;
+                            else if (cnt===3) { if(!blockedPrev) score += 1000; else score += 100; }
                             else if (cnt===2 && !blockedPrev) score += 10;
                             break;
                         }
@@ -403,7 +386,6 @@
             return score;
         }
 
-        // ... Interaction ...
         const logic = new GameLogic();
         const logEl = document.getElementById('log-console');
         const aiLoader = document.getElementById('ai-loader');
@@ -498,9 +480,10 @@
             });
         }
 
+        // --- Window Exports ---
         window.showSideSelection = () => {
-            document.getElementById('lobby-main').style.display='none';
-            document.getElementById('lobby-side').style.display='block';
+            document.getElementById('lobby-main').style.display = 'none';
+            document.getElementById('lobby-side').style.display = 'block';
         };
 
         window.startSingleGame = (playerNum) => {
@@ -516,7 +499,7 @@
             logic.aiMode = true; 
             updateUI();
 
-            // 백(2)을 선택했다면, AI(1)가 먼저 둔다
+            // 백(2)을 선택했다면, AI(1)가 먼저 둠
             if(myPlayerNum === 2) {
                 setTimeout(runAI, 500); 
             }
@@ -601,7 +584,8 @@
 
         window.toggleAIMode = () => {
             logic.aiMode = !logic.aiMode; updateUI();
-            if(!isOnline && logic.aiMode && logic.currentPlayer!==myPlayerNum) runAI();
+            // 싱글 모드에서 내 턴이 아니면 AI가 둠
+            if(!isOnline && logic.aiMode && logic.currentPlayer !== myPlayerNum) runAI();
         };
         window.undo = () => { if(!isOnline && logic.undo()) { log("무르기"); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); } };
         window.resetGame = () => { if(!isOnline && confirm("초기화?")) { logic.reset(); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); log("초기화됨"); } };
