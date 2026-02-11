@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>대학전쟁: 블록 오목 (Side Select Fixed)</title>
+    <title>대학전쟁: 블록 오목 (RL AI Ver.)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; background: #dfe4ea; font-family: 'Pretendard', sans-serif; user-select: none; -webkit-touch-callout: none; }
@@ -45,7 +45,7 @@
 <body>
     <div id="lobby-overlay">
         <div class="lobby-box">
-            <div class="lobby-title">🎲 블록 오목 <span style="font-size:1rem; color:#e74c3c;">(Master)</span></div>
+            <div class="lobby-title">🎲 블록 오목 <span style="font-size:1rem; color:#e74c3c;">(RL Trained)</span></div>
             
             <div id="lobby-main">
                 <button class="lobby-btn btn-single" onclick="showSideSelection()">👤 싱글 / AI 연습</button>
@@ -74,7 +74,7 @@
     </div>
 
     <div id="game-canvas"></div>
-    <div id="ai-loader">🧠 AI 수읽기 중...</div>
+    <div id="ai-loader">🧠 70만번 학습한 뇌 가동중...</div>
 
     <div id="ui-layer" style="display:none;">
         <div class="top-bar">
@@ -113,6 +113,7 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
+        // Firebase Config
         const firebaseConfig = {
             apiKey: "AIzaSyC6I8D1aazjTGBJdwQ1iHsQYyHXWHf3_PU",
             authDomain: "omok-game-95008.firebaseapp.com",
@@ -130,12 +131,74 @@
         let myPlayerNum = 0; 
         let isOnline = false;
 
+        // =========================================================
+        // 🧠 REAL Neural Network AI (Using 700k Model)
+        // =========================================================
+        class NeuralAI {
+            constructor() { this.weights = null; this.ready = false; }
+            async load() {
+                try {
+                    const res = await fetch('./legendary_ai.json');
+                    if (!res.ok) throw new Error("File not found");
+                    this.weights = await res.json();
+                    this.ready = true;
+                    console.log("🧠 700k Trained Model Loaded");
+                } catch (e) {
+                    console.error("AI load failed:", e);
+                    log("⚠️ legendary_ai.json 파일을 찾을 수 없습니다.");
+                }
+            }
+            
+            // [중요] 시점 변환 (Perspective Swap) 포함
+            predict(board, player) {
+                if (!this.ready) return null;
+                
+                let input = [];
+                for (let z=0; z<5; z++) {
+                    for (let y=0; y<5; y++) {
+                        for (let x=0; x<5; x++) {
+                            let val = board[z][y][x];
+                            // AI가 2번 플레이어라면, 보드를 뒤집어서 "내가 1번인 척" 하고 판단함
+                            if (player === 2) { 
+                                if (val === 1) val = 2;
+                                else if (val === 2) val = 1;
+                            }
+                            input.push(val);
+                        }
+                    }
+                }
+
+                // Neural Net Forward Pass (512x512)
+                let h1 = this.matMul(input, this.weights.fc0_w, this.weights.fc0_b).map(x => Math.max(0, x)); // ReLU
+                let h2 = this.matMul(h1, this.weights.fc1_w, this.weights.fc1_b).map(x => Math.max(0, x)); // ReLU
+                let output = this.matMul(h2, this.weights.fc2_w, this.weights.fc2_b);
+                
+                return output; // 200 action scores
+            }
+
+            matMul(input, W, b) {
+                let res = new Array(b.length).fill(0);
+                for (let i = 0; i < b.length; i++) {
+                    let sum = 0;
+                    for (let j = 0; j < input.length; j++) sum += input[j] * W[i][j];
+                    res[i] = sum + b[i];
+                }
+                return res;
+            }
+        }
+
         const SHAPES = [
             [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:1,z:0}], [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:-1,z:0}],
             [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:-1,z:0}], [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:1,z:0}],
             [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:1,y:0,z:1}], [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:-1,y:0,z:1}],
             [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:0,y:1,z:1}], [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:0,y:-1,z:1}]
         ];
+
+        function decodeAction(actionId) {
+            const shapeIdx = actionId % 8;
+            const posIdx = Math.floor(actionId / 8);
+            return { x: posIdx % 5, y: Math.floor(posIdx / 5), shapeIdx };
+        }
 
         class GameLogic {
             constructor() { this.reset(); }
@@ -239,11 +302,7 @@
                     this.currentPlayer = this.currentPlayer===1 ? 2:1;
                     if (this.blocksLeft[1] === 0 && this.blocksLeft[2] === 0) this.phase = 'MOVEMENT';
                     else if (this.blocksLeft[this.currentPlayer] === 0 && this.phase === 'PLACEMENT') this.phase = 'MOVEMENT';
-                    
-                    // Check AI Turn (Corrected)
-                    if(!isOnline && this.aiMode && this.currentPlayer !== myPlayerNum) {
-                        runAI();
-                    }
+                    if(!isOnline && this.aiMode && this.currentPlayer !== myPlayerNum) runAI();
                 }
                 sendMove();
                 return this.winner;
@@ -269,43 +328,49 @@
         }
 
         // =========================================================
-        // 🧠 Math AI (Heuristic Minimax)
+        // 🧠 Hybrid AI Search Logic (Fixing "No Move" Bug)
         // =========================================================
         async function getAIMove() {
+            if (!ai.ready) { log("AI 로딩중..."); return null; }
             aiLoader.style.display = 'block';
-            await new Promise(r => setTimeout(r, 50));
+            await new Promise(r => setTimeout(r, 50)); // Render UI
 
-            const player = logic.currentPlayer;
-            const validMoves = getAllValidMoves(logic, player);
-            if (validMoves.length === 0) { aiLoader.style.display='none'; return null; }
+            // 1. Get Neural Net Scores
+            const scores = ai.predict(logic.board, logic.currentPlayer);
+            if (!scores) { aiLoader.style.display='none'; return null; }
 
-            // 1. Instant Win
-            for (let move of validMoves) {
-                const sim = logic.clone(); applyMove(sim, move, player);
-                if (sim.checkWin() === player) { aiLoader.style.display='none'; return move; }
+            // 2. Generate All Legal Moves (To match against scores)
+            const validMoves = getAllValidMoves(logic, logic.currentPlayer);
+            
+            if (validMoves.length === 0) { 
+                aiLoader.style.display='none'; 
+                return null; 
             }
 
-            // 2. Block Instant Loss
-            const opponent = player===1?2:1;
-            const oppMoves = getAllValidMoves(logic, opponent);
-            for (let move of oppMoves) {
-                const sim = logic.clone(); applyMove(sim, move, opponent);
-                if (sim.checkWin() === opponent) {
-                    // Try to block or win
-                }
-            }
-
-            // 3. Evaluation
+            // 3. Find Best Move
             let bestMove = null;
             let maxScore = -Infinity;
-            validMoves.sort(() => 0.5 - Math.random());
 
             for (let move of validMoves) {
-                const sim = logic.clone();
-                applyMove(sim, move, player);
-                const score = evaluateBoard(sim, player);
+                // Map move to action index (0-199)
+                let actionIdx;
+                if (move.type === 'place') {
+                    // Place: cells are directly from SHAPES[s] + offset(x,y)
+                    // We need to recover the anchor (x,y) that generated this move.
+                    // Since we don't store anchor in 'move', we can infer or pass it.
+                    // Easier: Store x,y in 'move' inside getAllValidMoves.
+                    actionIdx = (move.y * 5 + move.x) * 8 + move.shapeIdx;
+                } else {
+                    // Move: target cells match the action
+                    actionIdx = (move.y * 5 + move.x) * 8 + move.shapeIdx;
+                }
+
+                const score = scores[actionIdx];
                 if (score > maxScore) { maxScore = score; bestMove = move; }
             }
+
+            // Fallback (Rare safety net)
+            if (!bestMove) bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
 
             aiLoader.style.display = 'none';
             return bestMove;
@@ -316,7 +381,10 @@
             if (g.blocksLeft[p] > 0) {
                 for (let x=0; x<5; x++) for (let y=0; y<5; y++) for (let s=0; s<8; s++) {
                     const sh = SHAPES[s]; const cells = sh.map(d => ({x:x+d.x, y:y+d.y, z:d.z}));
-                    if (g.checkValidity(p, cells).ok) moves.push({ type:'place', cells, shapeIdx: s });
+                    if (g.checkValidity(p, cells).ok) {
+                        // Store x,y for AI indexing
+                        moves.push({ type:'place', cells, shapeIdx: s, x, y });
+                    }
                 }
             } else {
                 const myBlocks = g.blocks.filter(b => b.player === p && !b.isFixed);
@@ -326,7 +394,9 @@
                     g.removeBlock(b.id);
                     for (let x=0; x<5; x++) for (let y=0; y<5; y++) for (let s=0; s<8; s++) {
                         const sh = SHAPES[s]; const cells = sh.map(d => ({x:x+d.x, y:y+d.y, z:d.z}));
-                        if (g.checkValidity(p, cells, true, orig).ok) moves.push({ type:'move', fromId:b.id, cells, shapeIdx: s });
+                        if (g.checkValidity(p, cells, true, orig).ok) {
+                            moves.push({ type:'move', fromId:b.id, cells, shapeIdx: s, x, y });
+                        }
                     }
                     g.addBlock(p, orig, b.shapeIdx, false);
                     g.blocks[g.blocks.length-1].id = b.id;
@@ -335,57 +405,7 @@
             return moves;
         }
 
-        function applyMove(g, m, p) {
-            if (m.type === 'place') { g.addBlock(p, m.cells, m.shapeIdx); g.blocksLeft[p]--; }
-            else { const b = g.blocks.find(x => x.id === m.fromId); if(b) { g.removeBlock(b.id); g.addBlock(p, m.cells, m.shapeIdx); } }
-        }
-
-        function evaluateBoard(g, p) {
-            let score = 0;
-            const opp = p===1?2:1;
-            const winner = g.checkWin();
-            if (winner === p) return 100000;
-            if (winner === opp) return -100000;
-
-            const topMap = Array.from({length: 5}, () => Array(5).fill(0));
-            for(let y=0; y<5; y++) for(let x=0; x<5; x++) for(let z=4; z>=0; z--) if(g.board[z][y][x]!==0) { topMap[y][x]=g.board[z][y][x]; break; }
-
-            const dirs = [{dx:1, dy:0}, {dx:0, dy:1}, {dx:1, dy:1}, {dx:1, dy:-1}];
-            score += countPatterns(topMap, p, dirs);
-            score -= countPatterns(topMap, opp, dirs) * 2.0; 
-            return score;
-        }
-
-        function countPatterns(map, color, dirs) {
-            let score = 0;
-            for(let y=0; y<5; y++) for(let x=0; x<5; x++) {
-                if(map[y][x] !== color) continue;
-                for(let d of dirs) {
-                    let cnt = 1;
-                    let blockedPrev = false;
-                    let px=x-d.dx, py=y-d.dy;
-                    if(px<0||px>=5||py<0||py>=5 || (map[py][px]!==0 && map[py][px]!==color)) blockedPrev = true;
-
-                    for(let k=1; k<5; k++) {
-                        let nx=x+d.dx*k, ny=y+d.dy*k;
-                        if(nx<0||nx>=5||ny<0||ny>=5) { 
-                            if (cnt===4) score += 500; if (cnt===3) score += 50; break;
-                        }
-                        if(map[ny][nx] === color) cnt++;
-                        else if(map[ny][nx] !== 0) {
-                            if (cnt===4) score += 500; if (cnt===3) score += 50; break;
-                        } else {
-                            if (cnt===4) score += 10000;
-                            else if (cnt===3) { if(!blockedPrev) score += 1000; else score += 100; }
-                            else if (cnt===2 && !blockedPrev) score += 10;
-                            break;
-                        }
-                    }
-                }
-            }
-            return score;
-        }
-
+        const ai = new NeuralAI(); ai.load();
         const logic = new GameLogic();
         const logEl = document.getElementById('log-console');
         const aiLoader = document.getElementById('ai-loader');
@@ -480,15 +500,13 @@
             });
         }
 
-        // --- Window Exports ---
         window.showSideSelection = () => {
-            document.getElementById('lobby-main').style.display = 'none';
-            document.getElementById('lobby-side').style.display = 'block';
+            document.getElementById('lobby-main').style.display='none';
+            document.getElementById('lobby-side').style.display='block';
         };
 
         window.startSingleGame = (playerNum) => {
-            isOnline = false; 
-            myPlayerNum = playerNum; 
+            isOnline = false; myPlayerNum = playerNum; 
             document.getElementById('lobby-overlay').style.display = 'none';
             document.getElementById('ui-layer').style.display = 'flex';
             
@@ -499,7 +517,6 @@
             logic.aiMode = true; 
             updateUI();
 
-            // 백(2)을 선택했다면, AI(1)가 먼저 둠
             if(myPlayerNum === 2) {
                 setTimeout(runAI, 500); 
             }
@@ -584,17 +601,21 @@
 
         window.toggleAIMode = () => {
             logic.aiMode = !logic.aiMode; updateUI();
-            // 싱글 모드에서 내 턴이 아니면 AI가 둠
             if(!isOnline && logic.aiMode && logic.currentPlayer !== myPlayerNum) runAI();
         };
         window.undo = () => { if(!isOnline && logic.undo()) { log("무르기"); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); } };
         window.resetGame = () => { if(!isOnline && confirm("초기화?")) { logic.reset(); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); log("초기화됨"); } };
         
-        window.addEventListener('keydown', (e) => { 
-            if(e.code==='KeyR') { currentShapeIdx++; updateGhost(); } 
+        // Key Fix: R키 중복 입력 방지
+        document.onkeydown = (e) => {
+            if(e.code==='KeyR') { currentShapeIdx++; updateGhost(); }
             if(e.code==='KeyZ') window.undo();
-        });
+        };
         
+        document.getElementById('btn-rotate').addEventListener('click', e=>{ e.stopPropagation(); currentShapeIdx++; updateGhost(); });
+        window.addEventListener('resize', () => { camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+        
+        // Mouse Logic
         const ray = new THREE.Raycaster(); const mouse = new THREE.Vector2(); let downTime=0;
         window.addEventListener('mousemove', e=>{
             mouse.x=(e.clientX/window.innerWidth)*2-1; mouse.y=-(e.clientY/window.innerHeight)*2+1;
@@ -646,9 +667,6 @@
                 } else log(chk.msg);
             }
         }
-        
-        document.getElementById('btn-rotate').addEventListener('click', e=>{ e.stopPropagation(); currentShapeIdx++; updateGhost(); });
-        window.addEventListener('resize', () => { camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
         
         function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
         renderBoard(); updateUI(); animate();
