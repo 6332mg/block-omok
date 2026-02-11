@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>대학전쟁: 블록 오목 (Legendary AI Final)</title>
+    <title>대학전쟁: 블록 오목 (AI Fix)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; background: #dfe4ea; font-family: 'Pretendard', sans-serif; user-select: none; -webkit-touch-callout: none; }
@@ -15,14 +15,10 @@
             display: flex; flex-direction: column; justify-content: space-between; 
         }
         
-        /* 상단 UI */
         .top-bar { 
-            pointer-events: auto; 
-            display: flex; flex-direction: column; gap: 8px; 
-            background: rgba(255,255,255,0.95); 
-            padding: 12px 15px; margin: 10px; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+            pointer-events: auto; display: flex; flex-direction: column; gap: 8px; 
+            background: rgba(255,255,255,0.95); padding: 12px 15px; margin: 10px; 
+            border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
         }
         .row-upper { display: flex; justify-content: space-between; align-items: center; width: 100%; }
         .row-lower { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 5px; }
@@ -40,21 +36,14 @@
         .btn-hint { background: #f1c40f; border-color: #f39c12; color: #fff; }
         .btn-ai-toggle { background: #ecf0f1; color: #7f8c8d; }
         .btn-ai-toggle.active { background: #2ecc71; color: white; border-color: #27ae60; }
+        .phase-badge { font-size: 0.75rem; color: white; padding: 4px 8px; border-radius: 4px; background: #333; vertical-align: middle; }
         
-        .phase-badge { 
-            font-size: 0.75rem; color: white; padding: 4px 8px; border-radius: 4px; 
-            background: #333; vertical-align: middle; 
-        }
-        
-        /* 하단 버튼들 */
         .fab-rotate { 
             pointer-events: auto; position: absolute; right: 20px; bottom: 30px; 
             width: 70px; height: 70px; background: #fff; color: #333; 
             border-radius: 50%; border: 2px solid #ddd; 
             display: flex; justify-content: center; align-items: center; 
-            font-size: 2.2rem; cursor: pointer; 
-            box-shadow: 0 6px 15px rgba(0,0,0,0.2); 
-            transition: transform 0.1s; 
+            font-size: 2.2rem; cursor: pointer; box-shadow: 0 6px 15px rgba(0,0,0,0.2); transition: transform 0.1s; 
         }
         .fab-rotate:active { transform: scale(0.95); background: #f9f9f9; }
         
@@ -62,8 +51,7 @@
             pointer-events: auto; position: absolute; left: 20px; bottom: 30px; 
             width: 45px; height: 45px; background: #3498db; color: white; 
             border-radius: 50%; display: flex; justify-content: center; align-items: center; 
-            font-size: 1.2rem; cursor: pointer; 
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3); 
+            font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); 
         }
         
         .log-panel { 
@@ -71,66 +59,29 @@
             background: rgba(0,0,0,0.6); color: #fff; 
             width: 250px; height: 120px; border-radius: 8px; padding: 10px; 
             overflow: hidden; font-family: monospace; font-size: 0.8rem; 
-            display: flex; flex-direction: column-reverse; 
-            text-shadow: 1px 1px 2px black; 
+            display: flex; flex-direction: column-reverse; text-shadow: 1px 1px 2px black; 
         }
         
-        /* 로비 화면 */
         #lobby-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(255,255,255,0.95); z-index: 200;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
             pointer-events: auto;
         }
-        .lobby-box { 
-            text-align: center; background: white; padding: 40px; 
-            border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
-            width: 85%; max-width: 400px; 
-        }
+        .lobby-box { text-align: center; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); width: 85%; max-width: 400px; }
         .lobby-title { font-size: 2rem; font-weight: bold; margin-bottom: 30px; color: #2c3e50; }
-        .lobby-btn { 
-            width: 100%; padding: 15px; margin: 10px 0; font-size: 1.1rem; 
-            border: none; border-radius: 10px; cursor: pointer; 
-            font-weight: bold; color: white; transition: transform 0.1s; 
-        }
-        .lobby-btn:active { transform: scale(0.98); }
-        .btn-single { background: #9b59b6; }
-        .btn-create { background: #3498db; }
-        .btn-join { background: #2ecc71; }
-        .lobby-input { 
-            width: 100%; padding: 12px; margin: 10px 0; font-size: 1.2rem; 
-            border: 2px solid #ddd; border-radius: 10px; 
-            box-sizing: border-box; text-align: center; letter-spacing: 2px;
-        }
+        .lobby-btn { width: 100%; padding: 15px; margin: 10px 0; font-size: 1.1rem; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; color: white; transition: transform 0.1s; }
+        .btn-single { background: #9b59b6; } .btn-create { background: #3498db; } .btn-join { background: #2ecc71; }
+        .lobby-input { width: 100%; padding: 12px; margin: 10px 0; font-size: 1.2rem; border: 2px solid #ddd; border-radius: 10px; box-sizing: border-box; text-align: center; letter-spacing: 2px; }
         
-        #ai-loader { 
-            display: none; position: absolute; top: 50%; left: 50%; 
-            transform: translate(-50%, -50%); 
-            background: rgba(0,0,0,0.8); color: white; 
-            padding: 15px 30px; border-radius: 30px; 
-            font-weight: bold; font-size: 1.2rem; z-index: 50; 
-            pointer-events: none; backdrop-filter: blur(5px);
-        }
-        
-        #my-player-badge { 
-            font-size: 0.9rem; font-weight: bold; padding: 6px 12px; 
-            border-radius: 20px; display: inline-block; 
-        }
+        #ai-loader { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 15px 30px; border-radius: 30px; font-weight: bold; font-size: 1.2rem; z-index: 50; pointer-events: none; backdrop-filter: blur(5px); }
+        #my-player-badge { font-size: 0.9rem; font-weight: bold; padding: 6px 12px; border-radius: 20px; display: inline-block; }
 
-        /* 모달창 */
-        .modal-overlay { 
-            pointer-events: auto; position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 300; 
-        }
-        .modal-content { 
-            background: white; width: 85%; max-width: 500px; max-height: 85%; 
-            border-radius: 12px; padding: 25px; overflow-y: auto; position: relative; 
-        }
+        .modal-overlay { pointer-events: auto; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 300; }
+        .modal-content { background: white; width: 85%; max-width: 500px; max-height: 85%; border-radius: 12px; padding: 25px; overflow-y: auto; position: relative; }
         .close-btn { position: absolute; top: 15px; right: 20px; font-size: 1.5rem; cursor: pointer; color: #888; }
         h3 { margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        .rule-sec { margin-bottom: 15px; }
-        .rule-head { font-weight: bold; color: #2c3e50; margin-bottom: 5px; }
-        .rule-desc { font-size: 0.9rem; color: #555; line-height: 1.5; }
+        .rule-sec { margin-bottom: 15px; } .rule-head { font-weight: bold; color: #2c3e50; margin-bottom: 5px; } .rule-desc { font-size: 0.9rem; color: #555; line-height: 1.5; }
     </style>
 
     <script type="importmap">
@@ -237,11 +188,7 @@
         // 🧠 Deep Learning AI Engine (Neural Network)
         // =========================================================
         class NeuralAI {
-            constructor() {
-                this.weights = null;
-                this.ready = false;
-            }
-
+            constructor() { this.weights = null; this.ready = false; }
             async load() {
                 try {
                     const res = await fetch('./legendary_ai.json');
@@ -254,59 +201,30 @@
                     log("⚠️ AI 파일을 찾을 수 없습니다. (legendary_ai.json)");
                 }
             }
-
-            // 보드 상태를 입력받아 200개 행동의 점수를 반환
             predict(board) {
                 if (!this.ready) return null;
-
-                // 1. Flatten Input (5x5x5 -> 125 array)
-                // 중요: Python 학습 환경과 순서가 일치해야 함.
                 let input = [];
-                for (let z=0; z<5; z++) {
-                    for (let y=0; y<5; y++) {
-                        for (let x=0; x<5; x++) {
-                            input.push(board[z][y][x]);
-                        }
-                    }
-                }
-
-                // 2. Feed Forward
-                // Layer 1 (125 -> 512)
-                let h1 = this.matMul(input, this.weights.fc0_w, this.weights.fc0_b);
-                h1 = h1.map(x => Math.max(0, x)); // ReLU
-
-                // Layer 2 (512 -> 512)
-                let h2 = this.matMul(h1, this.weights.fc1_w, this.weights.fc1_b);
-                h2 = h2.map(x => Math.max(0, x)); // ReLU
-
-                // Output Layer (512 -> 200)
-                let output = this.matMul(h2, this.weights.fc2_w, this.weights.fc2_b);
+                for (let z=0; z<5; z++) for (let y=0; y<5; y++) for (let x=0; x<5; x++) input.push(board[z][y][x]);
                 
-                return output; 
+                let h1 = this.matMul(input, this.weights.fc0_w, this.weights.fc0_b).map(x => Math.max(0, x));
+                let h2 = this.matMul(h1, this.weights.fc1_w, this.weights.fc1_b).map(x => Math.max(0, x));
+                return this.matMul(h2, this.weights.fc2_w, this.weights.fc2_b);
             }
-
             matMul(input, W, b) {
-                const outDim = b.length;
-                const inDim = input.length;
-                let res = new Array(outDim).fill(0);
-                for (let i = 0; i < outDim; i++) {
+                let res = new Array(b.length).fill(0);
+                for (let i = 0; i < b.length; i++) {
                     let sum = 0;
-                    for (let j = 0; j < inDim; j++) {
-                        sum += input[j] * W[i][j];
-                    }
+                    for (let j = 0; j < input.length; j++) sum += input[j] * W[i][j];
                     res[i] = sum + b[i];
                 }
                 return res;
             }
         }
 
-        // Action Decoder
         function decodeAction(actionId) {
             const shapeIdx = actionId % 8;
             const posIdx = Math.floor(actionId / 8);
-            const y = Math.floor(posIdx / 5);
-            const x = posIdx % 5;
-            return { x, y, shapeIdx };
+            return { x: posIdx % 5, y: Math.floor(posIdx / 5), shapeIdx };
         }
 
         // =========================================================
@@ -321,44 +239,28 @@
 
         class GameLogic {
             constructor() { this.reset(); }
-            
             reset() {
                 this.board = Array.from({length: 5}, () => Array.from({length: 5}, () => Array(5).fill(0)));
-                this.blocks = []; 
-                this.history = []; 
-                this.turnCount = 0;
-                this.currentPlayer = 1; 
-                this.blocksLeft = { 1: 4, 2: 4 }; 
-                this.phase = 'PLACEMENT'; 
-                this.winner = 0;
-                this.initFixedBlocks();
-                this.aiMode = false;
-                this.selectedBlock = null;
-                this.selectedBlockOriginalCells = null;
+                this.blocks = []; this.history = []; this.turnCount = 0; this.currentPlayer = 1;
+                this.blocksLeft = { 1: 4, 2: 4 }; this.phase = 'PLACEMENT'; this.winner = 0;
+                this.initFixedBlocks(); this.aiMode = false;
+                this.selectedBlock = null; this.selectedBlockOriginalCells = null;
             }
-
             serialize() {
-                return {
-                    board: this.board, blocks: this.blocks, turnCount: this.turnCount,
-                    currentPlayer: this.currentPlayer, blocksLeft: this.blocksLeft,
-                    phase: this.phase, winner: this.winner
-                };
+                return { board: this.board, blocks: this.blocks, turnCount: this.turnCount, currentPlayer: this.currentPlayer, blocksLeft: this.blocksLeft, phase: this.phase, winner: this.winner };
             }
             deserialize(data) { Object.assign(this, data); }
-
             initFixedBlocks() {
                 this.blocks = [];
                 this.board = Array.from({length: 5}, () => Array.from({length: 5}, () => Array(5).fill(0)));
                 this.addBlock(1, [{x:1, y:3, z:0}, {x:2, y:3, z:0}, {x:1, y:2, z:0}], 0, true);
                 this.addBlock(2, [{x:2, y:1, z:0}, {x:3, y:1, z:0}, {x:3, y:2, z:0}], 0, true);
             }
-
             addBlock(player, cells, shapeIdx, isFixed=false) {
                 const blockId = Date.now() + Math.random();
                 this.blocks.push({ id: blockId, player, cells, shapeIdx, isFixed });
                 cells.forEach(c => this.board[c.z][c.y][c.x] = player);
             }
-
             removeBlock(blockId) {
                 const idx = this.blocks.findIndex(b => b.id === blockId);
                 if (idx > -1) {
@@ -369,7 +271,6 @@
                 }
                 return null;
             }
-
             canPick(block) {
                 if (block.isFixed) return false;
                 for (let c of block.cells) {
@@ -381,22 +282,18 @@
                 }
                 return true;
             }
-
             pickBlock(x, y, z) {
                 const block = this.blocks.find(b => b.player === this.currentPlayer && !b.isFixed && b.cells.some(c => c.x===x && c.y===y && c.z===z));
                 if (!block) return { ok: false, msg: "내 블록이 아닙니다." };
-                if (!this.canPick(block)) return { ok: false, msg: "위에 블록이 있어 뺄 수 없습니다." };
-                
+                if (!this.canPick(block)) return { ok: false, msg: "위에 블록이 있습니다." };
                 this.saveState();
                 this.selectedBlockOriginalCells = JSON.parse(JSON.stringify(block.cells));
                 this.removeBlock(block.id);
                 this.selectedBlock = block;
                 return { ok: true, block: block };
             }
-
             checkValidity(player, cells, isMovement=false, originalCells=null) {
                 if (this.winner !== 0) return { ok: false, msg: "게임 종료됨" };
-                
                 const origin = originalCells || (isMovement && this.selectedBlockOriginalCells ? this.selectedBlockOriginalCells : null);
                 if (isMovement && origin) {
                     const cSet = new Set(cells.map(c=>`${c.x},${c.y},${c.z}`));
@@ -404,33 +301,28 @@
                     if (cSet.size === oSet.size) {
                         let same = true; 
                         for(let k of cSet) if(!oSet.has(k)) { same=false; break; }
-                        if(same) return { ok:false, msg:"제자리로 이동할 수 없습니다." };
+                        if(same) return { ok:false, msg:"제자리 불가" };
                     }
                 }
-
                 for(let c of cells) {
-                    if(c.x<0||c.x>4||c.y<0||c.y>4||c.z<0||c.z>4) return {ok:false, msg:"판을 벗어났습니다."};
-                    if(this.board[c.z][c.y][c.x]!==0) return {ok:false, msg:"이미 블록이 있습니다."};
+                    if(c.x<0||c.x>4||c.y<0||c.y>4||c.z<0||c.z>4) return {ok:false, msg:"범위 초과"};
+                    if(this.board[c.z][c.y][c.x]!==0) return {ok:false, msg:"이미 있음"};
                 }
-
                 if (!isMovement && this.turnCount < 2) {
                     const restricted = ["0,3","0,4","1,4","3,0","4,0","4,1"];
-                    if(cells.some(c=>c.z===0 && restricted.includes(`${c.x},${c.y}`))) return {ok:false, msg:"초반 금지 구역입니다."};
+                    if(cells.some(c=>c.z===0 && restricted.includes(`${c.x},${c.y}`))) return {ok:false, msg:"금지 구역"};
                 }
-                
-                const groundContacts = cells.filter(c=>c.z===0).length;
-                if (groundContacts !== 3 && groundContacts !== 1) return {ok:false, msg:"바닥에는 1칸(세움) 또는 3칸(눕힘)이 닿아야 합니다."};
-
+                const ground = cells.filter(c=>c.z===0).length;
+                if (ground!==3 && ground!==1) return {ok:false, msg:"접지 위반"};
                 for(let c of cells) {
                     if(c.z>0) {
                         const hasSup = this.board[c.z-1][c.y][c.x]!==0;
                         const isSelf = cells.some(sc=>sc.x===c.x && sc.y===c.y && sc.z===c.z-1);
-                        if(!hasSup && !isSelf) return {ok:false, msg:"아래에 지지대가 필요합니다."};
+                        if(!hasSup && !isSelf) return {ok:false, msg:"지지대 필요"};
                     }
                 }
                 return {ok:true, msg:"가능"};
             }
-
             confirmMove(cells, shapeIdx) {
                 if (this.phase === 'PLACEMENT') {
                     if(!isOnline) this.saveState();
@@ -442,23 +334,16 @@
                     this.selectedBlockOriginalCells = null;
                 }
                 this.winner = this.checkWin();
-                
                 if (this.winner === 0) {
                     this.turnCount++;
                     this.currentPlayer = this.currentPlayer===1 ? 2:1;
-                    
                     if (this.blocksLeft[1] === 0 && this.blocksLeft[2] === 0) this.phase = 'MOVEMENT';
                     else if (this.blocksLeft[this.currentPlayer] === 0 && this.phase === 'PLACEMENT') this.phase = 'MOVEMENT';
-                    
-                    // 싱글모드 AI 턴
-                    if (!isOnline && this.aiMode && this.currentPlayer === 2) {
-                        runAI();
-                    }
+                    if (!isOnline && this.aiMode && this.currentPlayer === 2) runAI();
                 }
                 sendMove();
                 return this.winner;
             }
-
             checkWin() {
                 const topMap = Array.from({length: 5}, () => Array(5).fill(0));
                 for(let y=0; y<5; y++) for(let x=0; x<5; x++) for(let z=4; z>=0; z--) if(this.board[z][y][x]!==0) { topMap[y][x]=this.board[z][y][x]; break; }
@@ -475,9 +360,8 @@
                 }
                 return 0;
             }
-
             saveState() {
-                if(isOnline) return; // 멀티는 서버가 state
+                if(isOnline) return;
                 const s = {
                     board: JSON.parse(JSON.stringify(this.board)),
                     blocks: JSON.parse(JSON.stringify(this.blocks)),
@@ -497,23 +381,20 @@
         }
 
         // =========================================================
-        // 🧠 AI Search Logic (Fix for Movement)
+        // 🧠 AI Search Logic (Exhaustive Search + Fallback)
         // =========================================================
         async function getAIMove() {
             if (!ai.ready) { log("🧠 AI 준비 중..."); return null; }
             aiLoader.style.display = 'block';
 
-            // 1. NN 예측 (점수 계산)
-            // AI는 "현재 상태"를 보고 "어디에 두면(Target) 좋은지" 점수를 매깁니다.
             const scores = ai.predict(logic.board);
-            if (!scores) return null;
+            if (!scores) { aiLoader.style.display='none'; return null; }
 
-            // 2. 점수 높은 순으로 정렬 (Best Candidates)
+            // 200개 모든 행동을 점수순 정렬
             const candidates = scores.map((val, idx) => ({ idx, val })).sort((a, b) => b.val - a.val);
-
             let bestMove = null;
 
-            // 3. 유효한 수 찾기
+            // 1. AI가 추천하는 순서대로 검사 (Placement)
             if (logic.phase === 'PLACEMENT') {
                 for (let c of candidates) {
                     const {x, y, shapeIdx} = decodeAction(c.idx);
@@ -524,54 +405,67 @@
                         break;
                     }
                 }
-            } else {
-                // [이동 단계 핵심 로직 수정]
-                // AI는 Target(목표지점)만 추천해줍니다.
-                // 우리는 "내가 가진 블록 중 하나라도 저기로 갈 수 있는지" 확인해야 합니다.
-                
+            } 
+            // 2. AI가 추천하는 순서대로 검사 (Movement)
+            else {
                 const myBlocks = logic.blocks.filter(b => b.player === logic.currentPlayer && !b.isFixed);
-                
-                // 후보지(Target) 순회
                 for (let c of candidates) {
-                    // 점수가 너무 낮으면(확신이 없으면) 그만 둡니다 (최적화)
-                    // if (c.val < 0) break; // 필요시 주석 해제
+                    const {x, y, shapeIdx} = decodeAction(c.idx);
+                    const sh = SHAPES[shapeIdx];
+                    const targetCells = sh.map(d => ({x: x+d.x, y: y+d.y, z: d.z}));
 
-                    const targetAction = decodeAction(c.idx);
-                    const sh = SHAPES[targetAction.shapeIdx];
-                    const targetCells = sh.map(d => ({x: targetAction.x+d.x, y: targetAction.y+d.y, z: d.z}));
-
-                    // 내 블록들을 하나씩 빼보는 시뮬레이션
                     for (let b of myBlocks) {
                         if (!logic.canPick(b)) continue;
-
-                        // 시뮬레이션: 잠시 제거
                         const originalCells = JSON.parse(JSON.stringify(b.cells));
                         logic.removeBlock(b.id); 
-
-                        // 유효성 체크
                         if (logic.checkValidity(logic.currentPlayer, targetCells, true, originalCells).ok) {
-                            // 찾았다! 이 블록(b)을 저기(targetCells)로 옮기면 됨!
-                            bestMove = { 
-                                type: 'move', 
-                                fromId: b.id, 
-                                cells: targetCells, 
-                                shapeIdx: targetAction.shapeIdx 
-                            };
-                            
-                            // 복구 (ID가 바뀔 수 있으므로 주의해서 복구)
+                            bestMove = { type: 'move', fromId: b.id, cells: targetCells, shapeIdx };
                             logic.addBlock(logic.currentPlayer, originalCells, b.shapeIdx, false);
-                            // 원래 ID로 되돌려놓아야 다음 루프에서 문제 없음
                             logic.blocks[logic.blocks.length-1].id = b.id; 
-                            
-                            break; // 블록 루프 탈출
+                            break; 
                         }
-
-                        // 복구
                         logic.addBlock(logic.currentPlayer, originalCells, b.shapeIdx, false);
                         logic.blocks[logic.blocks.length-1].id = b.id; 
                     }
+                    if (bestMove) break; 
+                }
+            }
 
-                    if (bestMove) break; // 후보지 루프 탈출 (최적의 수를 찾았으므로)
+            // 3. Fallback (비상 대책): AI가 추천한 게 다 안 되면 아무거나 둠
+            if (!bestMove) {
+                console.warn("AI Fallback 발동! (랜덤 탐색)");
+                if (logic.phase === 'PLACEMENT') {
+                    for(let i=0; i<200; i++) {
+                        const {x, y, shapeIdx} = decodeAction(i);
+                        const sh = SHAPES[shapeIdx];
+                        const cells = sh.map(d => ({x: x+d.x, y: y+d.y, z: d.z}));
+                        if(logic.checkValidity(logic.currentPlayer, cells).ok) {
+                            bestMove = { type:'place', cells, shapeIdx }; break;
+                        }
+                    }
+                } else {
+                    const myBlocks = logic.blocks.filter(b => b.player === logic.currentPlayer && !b.isFixed);
+                    for(let b of myBlocks) {
+                        if(!logic.canPick(b)) continue;
+                        const originalCells = JSON.parse(JSON.stringify(b.cells));
+                        logic.removeBlock(b.id);
+                        for(let i=0; i<200; i++) {
+                            const {x, y, shapeIdx} = decodeAction(i);
+                            const sh = SHAPES[shapeIdx];
+                            const targetCells = sh.map(d => ({x: x+d.x, y: y+d.y, z: d.z}));
+                            if(logic.checkValidity(logic.currentPlayer, targetCells, true, originalCells).ok) {
+                                bestMove = { type:'move', fromId:b.id, cells:targetCells, shapeIdx };
+                                logic.addBlock(logic.currentPlayer, originalCells, b.shapeIdx, false);
+                                logic.blocks[logic.blocks.length-1].id = b.id;
+                                break;
+                            }
+                        }
+                        if(logic.blocks.find(x=>x.id===b.id) === undefined) { // 혹시 복구 안됐으면 복구
+                             logic.addBlock(logic.currentPlayer, originalCells, b.shapeIdx, false);
+                             logic.blocks[logic.blocks.length-1].id = b.id;
+                        }
+                        if(bestMove) break;
+                    }
                 }
             }
 
@@ -580,11 +474,9 @@
         }
 
         // =========================================================
-        // View & Setup
+        // View & Interaction
         // =========================================================
-        const ai = new NeuralAI();
-        ai.load();
-        
+        const ai = new NeuralAI(); ai.load();
         const logic = new GameLogic();
         const logEl = document.getElementById('log-console');
         const aiLoader = document.getElementById('ai-loader');
@@ -624,10 +516,8 @@
             document.getElementById('p2-cnt').innerText = logic.blocksLeft[2];
             document.getElementById('turn-indicator').innerText = logic.currentPlayer===1?"(흑 차례)":"(백 차례)";
             document.getElementById('turn-indicator').style.color = logic.currentPlayer===1?"#e74c3c":"#2ecc71";
-            const phaseTxt = logic.phase==='MOVEMENT'?"이동":"착수";
-            document.getElementById('game-phase').innerText = phaseTxt;
+            document.getElementById('game-phase').innerText = logic.phase==='MOVEMENT'?"이동":"착수";
             document.getElementById('game-phase').style.background = logic.phase==='MOVEMENT'?"#e67e22":"#333";
-            
             const btn = document.getElementById('btn-ai-toggle');
             btn.innerText = logic.aiMode ? "🤖 AI 대전: ON" : "🤖 AI 대전: OFF";
             logic.aiMode ? btn.classList.add('active') : btn.classList.remove('active');
@@ -645,7 +535,6 @@
                     const m = new THREE.Mesh(geo, mat); m.position.set(c.x-2, c.z+0.5, c.y-2);
                     m.castShadow=true; m.receiveShadow=true; m.userData={id:b.id, parentGroup:grp}; grp.add(m);
                 });
-                // Bridges
                 for(let i=0; i<b.cells.length; i++) for(let j=i+1; j<b.cells.length; j++) {
                     const c1=b.cells[i], c2=b.cells[j];
                     if(Math.abs(c1.x-c2.x)+Math.abs(c1.y-c2.y)+Math.abs(c1.z-c2.z)===1) {
@@ -683,7 +572,6 @@
             });
         }
 
-        // --- Event Listeners ---
         window.startSingleGame = () => {
             isOnline = false; myPlayerNum = 1; 
             document.getElementById('lobby-overlay').style.display = 'none';
@@ -748,7 +636,7 @@
                     log("⚠️ [힌트] 빨강 -> 노랑 이동");
                 } else log("💡 [힌트] 노랑 위치 착수");
                 drawGhost(move.cells, 0xf1c40f, hintGroup, 0.8);
-            } else log("AI: 둘 곳이 없어요.");
+            } else log("AI: 지금은 둘 곳이 없네요.");
         };
 
         async function runAI() {
@@ -776,13 +664,11 @@
         window.undo = () => { if(!isOnline && logic.undo()) { log("무르기"); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); } };
         window.resetGame = () => { if(!isOnline && confirm("초기화?")) { logic.reset(); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); log("초기화됨"); } };
         
-        // Key Listeners
         window.addEventListener('keydown', (e) => { 
             if(e.code==='KeyR') { currentShapeIdx++; updateGhost(); } 
             if(e.code==='KeyZ') window.undo();
         });
         
-        // Mouse Listeners
         const ray = new THREE.Raycaster(); const mouse = new THREE.Vector2(); let downTime=0;
         window.addEventListener('mousemove', e=>{
             mouse.x=(e.clientX/window.innerWidth)*2-1; mouse.y=-(e.clientY/window.innerHeight)*2+1;
