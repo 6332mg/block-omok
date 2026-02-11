@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>대학전쟁: 블록 오목 (Final Visuals)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        body { margin: 0; overflow: hidden; background: #dfe4ea; font-family: 'Pretendard', sans-serif; user-select: none; -webkit-touch-callout: none; }
+        
+        #game-canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh; /* 모바일 주소창 대응 */
+            z-index: 1; touch-action: none;
+        }
+
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh;
+            z-index: 10; pointer-events: none;
+            display: flex; flex-direction: column; justify-content: space-between;
+        }
+
+        /* 상단 바 */
+        .top-bar {
+            pointer-events: auto;
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(255,255,255,0.95);
+            padding: 8px 15px; margin: 10px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .game-info { display: flex; flex-direction: column; gap: 2px; }
+        .title-row { display: flex; align-items: center; gap: 8px; }
+        .score-box { font-weight: bold; font-size: 0.95rem; margin-top: 2px; }
+        .p1 { color: #e74c3c; } .p2 { color: #2ecc71; } 
+
+        .btn-group { display: flex; gap: 8px; }
+        .btn {
+            background: #fff; border: 1px solid #ccc; padding: 8px 12px;
+            border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .btn:active { background: #eee; transform: translateY(1px); }
+
+        .phase-badge {
+            font-size: 0.7rem; color: white; padding: 3px 6px; border-radius: 4px;
+            background: #333; vertical-align: middle;
+        }
+
+        /* 회전 버튼 (우측 하단) */
+        .fab-rotate {
+            pointer-events: auto;
+            position: absolute; right: 20px; bottom: 30px;
+            width: 70px; height: 70px;
+            background: #fff; color: #333;
+            border-radius: 50%; border: 2px solid #ddd;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 2rem; cursor: pointer;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+            transition: transform 0.1s;
+        }
+        .fab-rotate:active { transform: scale(0.95); background: #f9f9f9; }
+
+        /* 규칙 버튼 (좌측 하단) */
+        .fab-rules {
+            pointer-events: auto;
+            position: absolute; left: 20px; bottom: 30px;
+            width: 45px; height: 45px;
+            background: #3498db; color: white;
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 1.2rem; cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        /* 로그창 */
+        .log-panel {
+            pointer-events: none;
+            position: absolute; left: 20px; bottom: 85px; 
+            background: rgba(0,0,0,0.6); color: #fff;
+            width: 250px; height: 120px;
+            border-radius: 8px; padding: 10px;
+            overflow: hidden; 
+            font-family: monospace; font-size: 0.8rem;
+            display: flex; flex-direction: column-reverse;
+            text-shadow: 1px 1px 2px black;
+        }
+
+        /* 모달창 */
+        .modal-overlay {
+            pointer-events: auto;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: none; justify-content: center; align-items: center;
+            z-index: 100;
+        }
+        .modal-content {
+            background: white; width: 85%; max-width: 500px; max-height: 85%;
+            border-radius: 12px; padding: 25px;
+            overflow-y: auto; position: relative;
+        }
+        .close-btn {
+            position: absolute; top: 15px; right: 20px;
+            font-size: 1.5rem; cursor: pointer; color: #888;
+        }
+        h3 { margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .rule-sec { margin-bottom: 15px; }
+        .rule-head { font-weight: bold; color: #2c3e50; margin-bottom: 5px; }
+        .rule-desc { font-size: 0.9rem; color: #555; line-height: 1.5; }
+    </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="game-canvas"></div>
+
+    <div id="ui-layer">
+        <div class="top-bar">
+            <div class="game-info">
+                <div class="title-row">
+                    <span style="font-weight:bold;">BLOCK OMOK</span>
+                    <span id="game-phase" class="phase-badge">착수</span>
+                </div>
+                <div class="score-box">
+                    <span class="p1">흑: <span id="p1-cnt">4</span></span>
+                    <span style="margin:0 5px; color:#ccc">|</span>
+                    <span class="p2">백: <span id="p2-cnt">4</span></span>
+                    <span id="turn-indicator" style="font-size:0.8rem; margin-left:5px; color:#e74c3c;">(흑 차례)</span>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn" onclick="window.undo()">↩️ 무르기</button>
+                <button class="btn" onclick="window.resetGame()">🔄 초기화</button>
+            </div>
+        </div>
+
+        <div class="log-panel" id="log-console">
+            <div>🚀 게임 시작!</div>
+        </div>
+
+        <div class="fab-rules" onclick="document.getElementById('rule-modal').style.display='flex'">?</div>
+        <div class="fab-rotate" id="btn-rotate">↻</div>
+    </div>
+
+    <div id="rule-modal" class="modal-overlay" onclick="if(event.target===this) this.style.display='none'">
+        <div class="modal-content">
+            <span class="close-btn" onclick="document.getElementById('rule-modal').style.display='none'">&times;</span>
+            <h3>📜 게임 규칙 상세</h3>
+            
+            <div class="rule-sec">
+                <div class="rule-head">1. 승리 조건</div>
+                <div class="rule-desc">위에서 내려다보았을 때(Top View), 자신의 색깔 블록 5개가 연속(가로, 세로, 대각선)되면 승리합니다.</div>
+            </div>
+
+            <div class="rule-sec">
+                <div class="rule-head">2. 착수 규칙</div>
+                <div class="rule-desc">
+                    - <b>접지:</b> 3칸(눕힘) 또는 1칸(세움)이 반드시 바닥(1층)에 닿아야 합니다.<br>
+                    - <b>지지:</b> 2층 이상으로 올라가는 부분은 바로 아래에 다른 블록이 있어야 합니다.<br>
+                    - <b>금지 구역:</b> 게임 시작 후 각자 2턴 동안은 귀퉁이에 착수할 수 없습니다.
+                </div>
+            </div>
+
+            <div class="rule-sec">
+                <div class="rule-head">3. 이동 단계</div>
+                <div class="rule-desc">
+                    - 4개의 블록을 모두 사용하면 <b>이동 단계</b>가 됩니다.<br>
+                    - 자신의 블록을 클릭해 들어올린 후 다른 곳으로 옮겨야 합니다.<br>
+                    - <b>위에 다른 블록이 얹혀있는 블록</b>은 뺄 수 없습니다.<br>
+                    - 제자리로 다시 놓을 수 없습니다.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+        // ==========================================
+        // 1. Game Logic
+        // ==========================================
+        class GameLogic {
+            constructor() { this.reset(); }
+
+            reset() {
+                this.board = Array.from({length: 5}, () => Array.from({length: 5}, () => Array(5).fill(0)));
+                this.blocks = []; 
+                this.history = []; 
+                this.turnCount = 0;
+                this.currentPlayer = 1; 
+                this.blocksLeft = { 1: 4, 2: 4 };
+                this.phase = 'PLACEMENT'; 
+                this.selectedBlock = null; 
+                this.selectedBlockOriginalCells = null;
+                this.winner = 0;
+                this.initFixedBlocks();
+            }
+
+            saveState() {
+                const state = {
+                    board: JSON.parse(JSON.stringify(this.board)),
+                    blocks: JSON.parse(JSON.stringify(this.blocks)),
+                    turnCount: this.turnCount,
+                    currentPlayer: this.currentPlayer,
+                    blocksLeft: {...this.blocksLeft},
+                    phase: this.phase,
+                    winner: this.winner
+                };
+                this.history.push(state);
+            }
+
+            undo() {
+                if (this.history.length === 0) return false;
+                const state = this.history.pop();
+                Object.assign(this, state);
+                this.selectedBlock = null; 
+                this.selectedBlockOriginalCells = null;
+                return true;
+            }
+
+            initFixedBlocks() {
+                this.addBlock(1, [{x:1, y:3, z:0}, {x:2, y:3, z:0}, {x:1, y:2, z:0}], 0, true);
+                this.addBlock(2, [{x:2, y:1, z:0}, {x:3, y:1, z:0}, {x:3, y:2, z:0}], 0, true);
+            }
+
+            addBlock(player, cells, shapeIdx, isFixed = false) {
+                const blockId = Date.now() + Math.random();
+                this.blocks.push({ id: blockId, player, cells, shapeIdx, isFixed });
+                cells.forEach(c => this.board[c.z][c.y][c.x] = player);
+            }
+
+            removeBlock(blockId) {
+                const idx = this.blocks.findIndex(b => b.id === blockId);
+                if (idx > -1) {
+                    const block = this.blocks[idx];
+                    block.cells.forEach(c => this.board[c.z][c.y][c.x] = 0);
+                    this.blocks.splice(idx, 1);
+                    return block;
+                }
+                return null;
+            }
+
+            pickBlock(x, y, z) {
+                const block = this.blocks.find(b => 
+                    b.player === this.currentPlayer && !b.isFixed &&
+                    b.cells.some(c => c.x===x && c.y===y && c.z===z)
+                );
+                if (!block) return { ok: false, msg: "내 블록이 아닙니다." };
+
+                for (let c of block.cells) {
+                    if (c.z >= 4) continue;
+                    const valAbove = this.board[c.z+1][c.y][c.x];
+                    if (valAbove !== 0) {
+                        const isSelf = block.cells.some(sc => sc.x===c.x && sc.y===c.y && sc.z===c.z+1);
+                        if (!isSelf) return { ok: false, msg: "위에 블록이 있어 이동 불가." };
+                    }
+                }
+                
+                this.saveState();
+                this.selectedBlockOriginalCells = JSON.parse(JSON.stringify(block.cells));
+                this.removeBlock(block.id);
+                this.selectedBlock = block;
+                return { ok: true, block: block };
+            }
+
+            checkValidity(player, cells, isMovement = false) {
+                if (this.winner !== 0) return { ok: false, msg: "게임 종료됨" };
+                
+                if (isMovement && this.selectedBlockOriginalCells) {
+                    const currentSet = new Set(cells.map(c => `${c.x},${c.y},${c.z}`));
+                    const originalSet = new Set(this.selectedBlockOriginalCells.map(c => `${c.x},${c.y},${c.z}`));
+                    let same = true;
+                    if (currentSet.size !== originalSet.size) same = false;
+                    else {
+                        for (let k of currentSet) { if (!originalSet.has(k)) { same = false; break; } }
+                    }
+                    if (same) return { ok: false, msg: "제자리로 이동할 수 없습니다." };
+                }
+
+                for(let c of cells) {
+                    if(c.x<0||c.x>4||c.y<0||c.y>4||c.z<0||c.z>4) return {ok:false, msg:"판을 벗어났습니다."};
+                    if(this.board[c.z][c.y][c.x] !== 0) return {ok:false, msg:"이미 블록이 있습니다."};
+                }
+                if (!isMovement && this.turnCount < 2) {
+                     const restricted = ["0,3", "0,4", "1,4", "3,0", "4,0", "4,1"];
+                     if (cells.some(c => c.z === 0 && restricted.includes(`${c.x},${c.y}`))) 
+                         return {ok:false, msg:"초반 금지 구역"};
+                }
+                const groundContacts = cells.filter(c => c.z === 0).length;
+                if (groundContacts !== 3 && groundContacts !== 1) 
+                    return {ok:false, msg:"3칸(눕힘) 또는 1칸(세움)만 바닥에 닿아야 함"};
+
+                for(let c of cells) {
+                    if(c.z > 0) {
+                        const hasSupportBelow = this.board[c.z-1][c.y][c.x] !== 0;
+                        const isSelfSupport = cells.some(sc => sc.x===c.x && sc.y===c.y && sc.z===c.z-1);
+                        if (!hasSupportBelow && !isSelfSupport) return {ok:false, msg:"지지대가 필요합니다."};
+                    }
+                }
+                return {ok:true, msg:"가능"};
+            }
+
+            confirmMove(cells, shapeIdx) {
+                if (this.phase === 'PLACEMENT') {
+                    this.saveState();
+                    this.addBlock(this.currentPlayer, cells, shapeIdx);
+                    this.blocksLeft[this.currentPlayer]--;
+                } else {
+                    this.addBlock(this.currentPlayer, cells, shapeIdx);
+                    this.selectedBlock = null;
+                    this.selectedBlockOriginalCells = null;
+                }
+                this.winner = this.checkWin();
+                if (this.winner === 0) {
+                    this.turnCount++;
+                    this.currentPlayer = this.currentPlayer===1 ? 2:1;
+                    if (this.blocksLeft[1] === 0 && this.blocksLeft[2] === 0) this.phase = 'MOVEMENT';
+                    else if (this.blocksLeft[this.currentPlayer] === 0 && this.phase === 'PLACEMENT') this.phase = 'MOVEMENT';
+                }
+                return this.winner;
+            }
+
+            checkWin() {
+                const topMap = Array.from({length: 5}, () => Array(5).fill(0));
+                for(let y=0; y<5; y++) {
+                    for(let x=0; x<5; x++) {
+                        for(let z=4; z>=0; z--) {
+                            if(this.board[z][y][x] !== 0) { topMap[y][x] = this.board[z][y][x]; break; }
+                        }
+                    }
+                }
+                const dirs = [{dx:1, dy:0}, {dx:0, dy:1}, {dx:1, dy:1}, {dx:1, dy:-1}];
+                for(let y=0; y<5; y++) {
+                    for(let x=0; x<5; x++) {
+                        let color = topMap[y][x];
+                        if(color === 0) continue;
+                        for(let d of dirs) {
+                            let count = 1;
+                            for(let k=1; k<5; k++) {
+                                let nx = x + d.dx*k; let ny = y + d.dy*k;
+                                if(nx>=0 && nx<5 && ny>=0 && ny<5 && topMap[ny][nx]===color) count++; else break;
+                            }
+                            if(count === 5) return color;
+                        }
+                    }
+                }
+                return 0;
+            }
+        }
+
+        // ==========================================
+        // 2. View & Interaction
+        // ==========================================
+        const logic = new GameLogic();
+        const logEl = document.getElementById('log-console');
+
+        function log(msg) { 
+            const div = document.createElement('div'); div.innerText = `> ${msg}`;
+            logEl.insertBefore(div, logEl.firstChild);
+            if(logEl.children.length > 4) logEl.removeChild(logEl.lastChild);
+        }
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xdfe4ea);
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+        camera.position.set(0, 14, 12); camera.lookAt(0,0,0);
+
+        const renderer = new THREE.WebGLRenderer({antialias:true});
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('game-canvas').appendChild(renderer.domElement);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        dirLight.position.set(5,15,5); dirLight.castShadow = true; scene.add(dirLight);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; controls.maxPolarAngle = Math.PI / 2; controls.rotateSpeed = 0.7;
+
+        const boardGroup = new THREE.Group(); scene.add(boardGroup);
+        const ghostGroup = new THREE.Group(); scene.add(ghostGroup);
+
+        const hitPlane = new THREE.Mesh(new THREE.PlaneGeometry(6,6), new THREE.MeshBasicMaterial({ visible: false }));
+        hitPlane.material = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.0, side: THREE.DoubleSide });
+        hitPlane.rotation.x = -Math.PI/2; hitPlane.position.y = 0.5; scene.add(hitPlane);
+
+        scene.add(new THREE.GridHelper(5,5, 0xbdc3c7, 0xecf0f1));
+        const basePlate = new THREE.Mesh(new THREE.BoxGeometry(5, 0.1, 5), new THREE.MeshStandardMaterial({color: 0xffffff}));
+        basePlate.position.y = -0.05; basePlate.receiveShadow = true; scene.add(basePlate);
+
+        const SHAPES = [
+            [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:1,z:0}],
+            [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:-1,z:0}],
+            [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:-1,z:0}],
+            [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:1,z:0}],
+            [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:1,y:0,z:1}], 
+            [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:-1,y:0,z:1}],
+            [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:0,y:1,z:1}],
+            [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:0,y:-1,z:1}]
+        ];
+        
+        let currentShapeIdx = 0;
+        let hoverX = -1, hoverY = -1;
+        let hoveredBlockId = null;
+
+        function updateUI() {
+            document.getElementById('p1-cnt').innerText = logic.blocksLeft[1];
+            document.getElementById('p2-cnt').innerText = logic.blocksLeft[2];
+            const pName = logic.currentPlayer===1 ? "(흑 차례)" : "(백 차례)";
+            const pColor = logic.currentPlayer===1 ? "#e74c3c" : "#2ecc71";
+            const indicator = document.getElementById('turn-indicator');
+            indicator.innerText = pName; indicator.style.color = pColor;
+            const phaseBadge = document.getElementById('game-phase');
+            if (logic.phase === 'MOVEMENT') {
+                phaseBadge.innerText = "이동"; phaseBadge.style.background = "#e67e22";
+            } else {
+                phaseBadge.innerText = "착수"; phaseBadge.style.background = "#333";
+            }
+        }
+
+        // [Visual] Render Board with Highlight & Connections
+        function renderBoard() {
+            for(let i=boardGroup.children.length-1; i>=0; i--) boardGroup.remove(boardGroup.children[i]);
+            
+            const CUBE_SIZE = 0.98;
+            const geo = new RoundedBoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE, 4, 0.1);
+            
+            logic.blocks.forEach(block => {
+                const isHovered = (block.id === hoveredBlockId);
+                let colorVal;
+                if (block.player === 1) colorVal = isHovered ? 0x555555 : 0x333333; 
+                else colorVal = isHovered ? 0xffffff : 0xeeeeee; 
+
+                const mat = new THREE.MeshStandardMaterial({
+                    color: colorVal, 
+                    roughness: 0.3,
+                    emissive: isHovered ? 0x333333 : 0x000000,
+                });
+
+                const blockGroup = new THREE.Group();
+                blockGroup.userData = { id: block.id, isBlock: true };
+
+                block.cells.forEach(c => {
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(c.x-2, c.z+0.5, c.y-2);
+                    mesh.castShadow = true; mesh.receiveShadow = true;
+                    mesh.userData = { id: block.id, parentGroup: blockGroup };
+                    blockGroup.add(mesh);
+                });
+
+                // [NEW] 연결 부위(Bridge) 생성하여 덩어리감 주기
+                const BRIDGE_THICK = 0.8; 
+                const BRIDGE_LEN = 1.0; 
+                for(let i=0; i<block.cells.length; i++) {
+                    for(let j=i+1; j<block.cells.length; j++) {
+                        const c1 = block.cells[i]; const c2 = block.cells[j];
+                        const dist = Math.abs(c1.x-c2.x) + Math.abs(c1.y-c2.y) + Math.abs(c1.z-c2.z);
+                        if(dist === 1) {
+                            let bridgeGeo;
+                            if (Math.abs(c1.x-c2.x)===1) bridgeGeo = new THREE.BoxGeometry(BRIDGE_LEN, BRIDGE_THICK, BRIDGE_THICK);
+                            else if (Math.abs(c1.y-c2.y)===1) bridgeGeo = new THREE.BoxGeometry(BRIDGE_THICK, BRIDGE_THICK, BRIDGE_LEN);
+                            else bridgeGeo = new THREE.BoxGeometry(BRIDGE_THICK, BRIDGE_LEN, BRIDGE_THICK);
+
+                            const bridge = new THREE.Mesh(bridgeGeo, mat);
+                            bridge.position.set((c1.x+c2.x)/2 - 2, (c1.z+c2.z)/2 + 0.5, (c1.y+c2.y)/2 - 2);
+                            blockGroup.add(bridge);
+                        }
+                    }
+                }
+                boardGroup.add(blockGroup);
+            });
+        }
+
+        // [Visual] Ghost update with Bridges
+        function updateGhost() {
+            while(ghostGroup.children.length > 0) ghostGroup.remove(ghostGroup.children[0]);
+            
+            if(logic.winner !== 0) return;
+            if(logic.phase === 'MOVEMENT' && !logic.selectedBlock) return; 
+            if(hoverX === -1) return;
+
+            const shape = SHAPES[currentShapeIdx % 8];
+            const cells = shape.map(c => ({x:hoverX+c.x, y:hoverY+c.y, z:c.z}));
+            
+            const check = logic.checkValidity(logic.currentPlayer, cells, logic.phase==='MOVEMENT');
+            const color = check.ok ? 0x2ecc71 : 0xe74c3c;
+            const mat = new THREE.MeshBasicMaterial({color:color, transparent:true, opacity:0.5});
+            const geo = new RoundedBoxGeometry(0.96, 0.96, 0.96, 4, 0.1);
+
+            // Cells
+            cells.forEach(c => {
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(c.x-2, c.z+0.5, c.y-2);
+                ghostGroup.add(mesh);
+            });
+
+            // [NEW] Ghost Bridges (미리보기에도 다리 추가)
+            const BRIDGE_THICK = 0.8; const BRIDGE_LEN = 1.0; 
+            for(let i=0; i<cells.length; i++) {
+                for(let j=i+1; j<cells.length; j++) {
+                    const c1 = cells[i]; const c2 = cells[j];
+                    const dist = Math.abs(c1.x-c2.x) + Math.abs(c1.y-c2.y) + Math.abs(c1.z-c2.z);
+                    if(dist === 1) {
+                        let bridgeGeo;
+                        if (Math.abs(c1.x-c2.x)===1) bridgeGeo = new THREE.BoxGeometry(BRIDGE_LEN, BRIDGE_THICK, BRIDGE_THICK);
+                        else if (Math.abs(c1.y-c2.y)===1) bridgeGeo = new THREE.BoxGeometry(BRIDGE_THICK, BRIDGE_THICK, BRIDGE_LEN);
+                        else bridgeGeo = new THREE.BoxGeometry(BRIDGE_THICK, BRIDGE_LEN, BRIDGE_THICK);
+                        
+                        const bridge = new THREE.Mesh(bridgeGeo, mat);
+                        bridge.position.set((c1.x+c2.x)/2 - 2, (c1.z+c2.z)/2 + 0.5, (c1.y+c2.y)/2 - 2);
+                        ghostGroup.add(bridge);
+                    }
+                }
+            }
+        }
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let downTime = 0;
+
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            // 1. Hover check for blocks (Movement Phase)
+            if (logic.phase === 'MOVEMENT' && !logic.selectedBlock) {
+                const intersectsBlock = raycaster.intersectObjects(boardGroup.children, true);
+                if (intersectsBlock.length > 0) {
+                    const hitObj = intersectsBlock[0].object;
+                    const bId = hitObj.userData.id; // 메쉬에 저장된 ID
+                    
+                    if (bId && bId !== hoveredBlockId) {
+                        hoveredBlockId = bId;
+                        renderBoard();
+                    }
+                    hoverX = -1; updateGhost();
+                    return; 
+                } else {
+                    if (hoveredBlockId !== null) {
+                        hoveredBlockId = null; renderBoard();
+                    }
+                }
+            }
+
+            // 2. Hover check for ground
+            const intersects = raycaster.intersectObject(hitPlane);
+            if(intersects.length > 0) {
+                const p = intersects[0].point;
+                const gx = Math.floor(p.x + 2.5); const gy = Math.floor(p.z + 2.5);
+                if(gx>=0 && gx<5 && gy>=0 && gy<5) {
+                    if(hoverX !== gx || hoverY !== gy) { hoverX = gx; hoverY = gy; updateGhost(); }
+                } else { hoverX = -1; updateGhost(); }
+            } else { hoverX = -1; updateGhost(); }
+        });
+
+        window.addEventListener('mousedown', () => downTime = Date.now());
+        window.addEventListener('mouseup', () => {
+            if(Date.now() - downTime < 250) handleClick();
+        });
+
+        document.getElementById('btn-rotate').addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentShapeIdx++; updateGhost();
+        });
+
+        function handleClick() {
+            if (logic.winner !== 0) return;
+
+            // Pick Block
+            if (logic.phase === 'MOVEMENT' && !logic.selectedBlock) {
+                if (hoveredBlockId) {
+                    const block = logic.blocks.find(b => b.id === hoveredBlockId);
+                    if (block) {
+                        const c = block.cells[0];
+                        const res = logic.pickBlock(c.x, c.y, c.z);
+                        if(res.ok) {
+                            log("선택됨. 이동할 곳 클릭.");
+                            currentShapeIdx = res.block.shapeIdx; 
+                            hoveredBlockId = null; renderBoard();
+                        } else { log(`🚫 ${res.msg}`); }
+                    }
+                }
+                return;
+            }
+
+            // Place Block
+            if (hoverX !== -1) {
+                const shape = SHAPES[currentShapeIdx % 8];
+                const cells = shape.map(c => ({x:hoverX+c.x, y:hoverY+c.y, z:c.z}));
+                const check = logic.checkValidity(logic.currentPlayer, cells, logic.phase==='MOVEMENT');
+                
+                if (check.ok) {
+                    const win = logic.confirmMove(cells, currentShapeIdx);
+                    log(`착수 완료!`);
+                    if (win !== 0) {
+                        log(`🎉 Player ${win} 승리!!`);
+                        setTimeout(() => alert(`Player ${win} 승리!`), 100);
+                    }
+                    updateUI(); renderBoard(); updateGhost();
+                } else { log(`🚫 ${check.msg}`); }
+            }
+        }
+
+        window.undo = () => { if(logic.undo()) { log("무르기 완료"); hoveredBlockId=null; renderBoard(); updateUI(); updateGhost(); } };
+        window.resetGame = () => { if(confirm("초기화?")) { logic.reset(); hoveredBlockId=null; renderBoard(); updateUI(); log("초기화됨"); } };
+        window.addEventListener('keydown', (e) => { 
+            if(e.code==='KeyR') { currentShapeIdx++; updateGhost(); } 
+            if(e.code==='KeyZ') window.undo(); 
+        });
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+
+        function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+        renderBoard(); animate();
+    </script>
+</body>
+</html>
