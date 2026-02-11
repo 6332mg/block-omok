@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>대학전쟁: 블록 오목 (Math AI)</title>
+    <title>대학전쟁: 블록 오목 (Select Side)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; background: #dfe4ea; font-family: 'Pretendard', sans-serif; user-select: none; -webkit-touch-callout: none; }
@@ -21,6 +21,8 @@
         .btn-ai-toggle { background: #ecf0f1; color: #7f8c8d; }
         .btn-ai-toggle.active { background: #2ecc71; color: white; border-color: #27ae60; }
         .phase-badge { font-size: 0.75rem; color: white; padding: 4px 8px; border-radius: 4px; background: #333; vertical-align: middle; }
+        
+        /* 버튼들 */
         .fab-rotate { pointer-events: auto; position: absolute; right: 20px; bottom: 30px; width: 70px; height: 70px; background: #fff; color: #333; border-radius: 50%; border: 2px solid #ddd; display: flex; justify-content: center; align-items: center; font-size: 2.2rem; cursor: pointer; box-shadow: 0 6px 15px rgba(0,0,0,0.2); transition: transform 0.1s; }
         .fab-rotate:active { transform: scale(0.95); background: #f9f9f9; }
         .fab-rules { pointer-events: auto; position: absolute; left: 20px; bottom: 30px; width: 45px; height: 45px; background: #3498db; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
@@ -45,9 +47,10 @@
 <body>
     <div id="lobby-overlay">
         <div class="lobby-box">
-            <div class="lobby-title">🎲 블록 오목 <span style="font-size:1rem; color:#e74c3c;">(Math AI)</span></div>
+            <div class="lobby-title">🎲 블록 오목 <span style="font-size:1rem; color:#e74c3c;">(Pro)</span></div>
+            
             <div id="lobby-main">
-                <button class="lobby-btn btn-single" onclick="startSingleGame()">👤 싱글 / AI 연습</button>
+                <button class="lobby-btn btn-single" onclick="showSideSelection()">👤 싱글 / AI 연습</button>
                 <div style="margin: 20px 0; border-top: 1px solid #eee;"></div>
                 <div style="font-size:0.9rem; color:#666; margin-bottom:10px;">온라인 멀티플레이</div>
                 <button class="lobby-btn btn-create" onclick="createRoom()">방 만들기 (Host)</button>
@@ -55,6 +58,14 @@
                 <input type="text" id="room-code-input" class="lobby-input" placeholder="코드 4자리 입력" maxlength="4">
                 <button class="lobby-btn btn-join" onclick="joinRoom()">방 참가하기 (Join)</button>
             </div>
+
+            <div id="lobby-side" style="display:none;">
+                <h3 style="margin-bottom:20px; color:#555;">진영을 선택하세요</h3>
+                <button class="lobby-btn" style="background:#333; color:white;" onclick="startSingleGame(1)">⚫ 흑돌 (선공)</button>
+                <button class="lobby-btn" style="background:#eee; color:#333; border:1px solid #ccc;" onclick="startSingleGame(2)">⚪ 백돌 (후공)</button>
+                <button class="btn" onclick="location.reload()" style="margin-top:20px; width:100%;">취소</button>
+            </div>
+
             <div id="lobby-wait" style="display:none;">
                 <div style="font-size:1.2rem; margin-bottom:15px;">방 코드: <span id="display-room-code" style="color:#e74c3c; font-weight:bold; font-size:2rem; letter-spacing:3px;"></span></div>
                 <div style="color:#555;">친구에게 이 코드를 알려주세요.</div>
@@ -63,8 +74,10 @@
             </div>
         </div>
     </div>
+
     <div id="game-canvas"></div>
-    <div id="ai-loader">🧠 AI 계산 중...</div>
+    <div id="ai-loader">🧠 AI 수읽기 중...</div>
+
     <div id="ui-layer" style="display:none;">
         <div class="top-bar">
             <div class="row-upper">
@@ -84,6 +97,7 @@
         <div class="fab-rotate" id="btn-rotate">↻</div>
         <div class="fab-rules" onclick="document.getElementById('rule-modal').style.display='flex'">?</div>
     </div>
+
     <div id="rule-modal" class="modal-overlay" onclick="if(event.target===this) this.style.display='none'">
         <div class="modal-content">
             <span class="close-btn" onclick="document.getElementById('rule-modal').style.display='none'">&times;</span>
@@ -228,7 +242,9 @@
                     this.currentPlayer = this.currentPlayer===1 ? 2:1;
                     if (this.blocksLeft[1] === 0 && this.blocksLeft[2] === 0) this.phase = 'MOVEMENT';
                     else if (this.blocksLeft[this.currentPlayer] === 0 && this.phase === 'PLACEMENT') this.phase = 'MOVEMENT';
-                    if(!isOnline && this.aiMode && this.currentPlayer===2) runAI();
+                    
+                    // AI Turn Check
+                    if(!isOnline && this.aiMode && this.currentPlayer !== myPlayerNum) runAI();
                 }
                 sendMove();
                 return this.winner;
@@ -254,165 +270,140 @@
         }
 
         // =========================================================
-        // 🧠 Math AI (Heuristic Minimax) - No JSON needed
+        // 🧠 Math AI (Heuristic Minimax) - Improved
         // =========================================================
         async function getAIMove() {
             aiLoader.style.display = 'block';
-            
-            // Allow UI to render loader
             await new Promise(r => setTimeout(r, 50));
 
             const player = logic.currentPlayer;
             const validMoves = getAllValidMoves(logic, player);
-            
             if (validMoves.length === 0) { aiLoader.style.display='none'; return null; }
 
-            // 1. Instant Win Check
+            // 1. Kill Move (Immediate Win)
             for (let move of validMoves) {
-                const simLogic = logic.clone();
-                applyMove(simLogic, move, player);
-                if (simLogic.checkWin() === player) {
-                    aiLoader.style.display='none';
-                    return move;
-                }
+                const sim = logic.clone();
+                applyMove(sim, move, player);
+                if (sim.checkWin() === player) { aiLoader.style.display='none'; return move; }
             }
 
-            // 2. Block Instant Loss Check
-            const opponent = player === 1 ? 2 : 1;
+            // 2. Block Death (Immediate Loss)
+            const opponent = player===1?2:1;
             const oppMoves = getAllValidMoves(logic, opponent);
             for (let move of oppMoves) {
-                const simLogic = logic.clone();
-                applyMove(simLogic, move, opponent);
-                if (simLogic.checkWin() === opponent) {
-                    // We must block this! Find a move that occupies one of the winning cells or changes board state
-                    // Simple heuristic: If opp can win, playing that move ourselves (if valid) is usually a good block
-                    // But in Block Omok, we might block by placing elsewhere.
-                    // Better approach: Evaluate current valid moves to see which one creates best state.
+                const sim = logic.clone();
+                applyMove(sim, move, opponent);
+                if (sim.checkWin() === opponent) {
+                    // Try to block this specific spot or state
+                    // Simple heuristic: if we can occupy the winning cell, do it.
+                    // But for now, we rely on the main evaluation function to naturally catch this.
                 }
             }
 
-            // 3. Heuristic Score Evaluation
+            // 3. Score Evaluation
             let bestMove = null;
             let maxScore = -Infinity;
-
-            // Sort moves by simple heuristic to optimize
-            // Random shuffle to add variety if scores are equal
-            validMoves.sort(() => 0.5 - Math.random());
+            validMoves.sort(() => 0.5 - Math.random()); // Shuffle for variety
 
             for (let move of validMoves) {
-                const simLogic = logic.clone();
-                applyMove(simLogic, move, player);
-                
-                // Evaluate board state
-                const score = evaluateBoard(simLogic, player);
-                if (score > maxScore) {
-                    maxScore = score;
-                    bestMove = move;
-                }
+                const sim = logic.clone();
+                applyMove(sim, move, player);
+                const score = evaluateBoard(sim, player);
+                if (score > maxScore) { maxScore = score; bestMove = move; }
             }
 
             aiLoader.style.display = 'none';
             return bestMove;
         }
 
-        function getAllValidMoves(gameLogic, player) {
+        function getAllValidMoves(g, p) {
             const moves = [];
-            if (gameLogic.blocksLeft[player] > 0) {
+            if (g.blocksLeft[p] > 0) {
                 for (let x=0; x<5; x++) for (let y=0; y<5; y++) for (let s=0; s<8; s++) {
-                    const sh = SHAPES[s];
-                    const cells = sh.map(d => ({x: x+d.x, y: y+d.y, z: d.z}));
-                    if (gameLogic.checkValidity(player, cells).ok) {
-                        moves.push({ type:'place', cells, shapeIdx: s });
-                    }
+                    const sh = SHAPES[s]; const cells = sh.map(d => ({x:x+d.x, y:y+d.y, z:d.z}));
+                    if (g.checkValidity(p, cells).ok) moves.push({ type:'place', cells, shapeIdx: s });
                 }
             } else {
-                const myBlocks = gameLogic.blocks.filter(b => b.player === player && !b.isFixed);
+                const myBlocks = g.blocks.filter(b => b.player === p && !b.isFixed);
                 for (let b of myBlocks) {
-                    if (!gameLogic.canPick(b)) continue;
-                    const originalCells = JSON.parse(JSON.stringify(b.cells));
-                    gameLogic.removeBlock(b.id); 
+                    if (!g.canPick(b)) continue;
+                    const orig = JSON.parse(JSON.stringify(b.cells));
+                    g.removeBlock(b.id);
                     for (let x=0; x<5; x++) for (let y=0; y<5; y++) for (let s=0; s<8; s++) {
-                        const sh = SHAPES[s];
-                        const cells = sh.map(d => ({x: x+d.x, y: y+d.y, z: d.z}));
-                        if (gameLogic.checkValidity(player, cells, true, originalCells).ok) {
-                            moves.push({ type:'move', fromId: b.id, cells, shapeIdx: s });
-                        }
+                        const sh = SHAPES[s]; const cells = sh.map(d => ({x:x+d.x, y:y+d.y, z:d.z}));
+                        if (g.checkValidity(p, cells, true, orig).ok) moves.push({ type:'move', fromId:b.id, cells, shapeIdx: s });
                     }
-                    gameLogic.addBlock(player, originalCells, b.shapeIdx, false); 
-                    gameLogic.blocks[gameLogic.blocks.length-1].id = b.id; 
+                    g.addBlock(p, orig, b.shapeIdx, false);
+                    g.blocks[g.blocks.length-1].id = b.id;
                 }
             }
             return moves;
         }
 
-        function applyMove(gameLogic, move, player) {
-            if (move.type === 'place') {
-                gameLogic.addBlock(player, move.cells, move.shapeIdx);
-                gameLogic.blocksLeft[player]--;
-            } else {
-                const b = gameLogic.blocks.find(x => x.id === move.fromId);
-                if(b) {
-                    gameLogic.removeBlock(b.id);
-                    gameLogic.addBlock(player, move.cells, move.shapeIdx);
-                }
-            }
+        function applyMove(g, m, p) {
+            if (m.type === 'place') { g.addBlock(p, m.cells, m.shapeIdx); g.blocksLeft[p]--; }
+            else { const b = g.blocks.find(x => x.id === m.fromId); if(b) { g.removeBlock(b.id); g.addBlock(p, m.cells, m.shapeIdx); } }
         }
 
-        function evaluateBoard(gameLogic, player) {
-            // Simple Heuristic:
-            // 4-in-row (open): 10000
-            // 3-in-row (open): 1000
-            // 2-in-row (open): 100
-            // Height bonus: +10 per z
-            // Central bonus: +5
-            
+        function evaluateBoard(g, p) {
             let score = 0;
-            const opponent = player === 1 ? 2 : 1;
-            
-            // Check Win (Highest Priority)
-            const winner = gameLogic.checkWin();
-            if (winner === player) return 100000;
-            if (winner === opponent) return -100000;
+            const opp = p===1?2:1;
+            const winner = g.checkWin();
+            if (winner === p) return 100000;
+            if (winner === opp) return -100000;
 
-            // Generate Top Map
             const topMap = Array.from({length: 5}, () => Array(5).fill(0));
-            for(let y=0; y<5; y++) for(let x=0; x<5; x++) for(let z=4; z>=0; z--) if(gameLogic.board[z][y][x]!==0) { topMap[y][x]=gameLogic.board[z][y][x]; break; }
+            for(let y=0; y<5; y++) for(let x=0; x<5; x++) for(let z=4; z>=0; z--) if(g.board[z][y][x]!==0) { topMap[y][x]=g.board[z][y][x]; break; }
 
-            // Analyze Lines
             const dirs = [{dx:1, dy:0}, {dx:0, dy:1}, {dx:1, dy:1}, {dx:1, dy:-1}];
             
-            // My Score
-            score += countLines(topMap, player, dirs);
-            // Opponent Score (Subtract heavily to block)
-            score -= countLines(topMap, opponent, dirs) * 1.5; // Defensive play
+            // Aggressive Score
+            score += countPatterns(topMap, p, dirs);
+            // Defensive Score (Block opponent) - Weight higher to be safe
+            score -= countPatterns(topMap, opp, dirs) * 2.0; 
 
             return score;
         }
 
-        function countLines(map, color, dirs) {
+        function countPatterns(map, color, dirs) {
             let score = 0;
             for(let y=0; y<5; y++) for(let x=0; x<5; x++) {
                 if(map[y][x] !== color) continue;
                 for(let d of dirs) {
                     let cnt = 1;
-                    let blocked = false;
+                    let blockedPrev = false; // Check boundary behind
+                    let px=x-d.dx, py=y-d.dy;
+                    if(px<0||px>=5||py<0||py>=5 || (map[py][px]!==0 && map[py][px]!==color)) blockedPrev = true;
+
                     for(let k=1; k<5; k++) {
                         let nx=x+d.dx*k, ny=y+d.dy*k;
-                        if(nx<0||nx>=5||ny<0||ny>=5) { blocked=true; break; } // Wall
+                        if(nx<0||nx>=5||ny<0||ny>=5) { // Wall
+                            if (cnt===4) score += 500; // Blocked 4
+                            if (cnt===3) score += 50; // Blocked 3
+                            break;
+                        }
                         if(map[ny][nx] === color) cnt++;
-                        else if(map[ny][nx] !== 0) { blocked=true; break; } // Opponent
-                        else break; // Empty
+                        else if(map[ny][nx] !== 0) { // Opponent block
+                            if (cnt===4) score += 500; // Blocked 4
+                            if (cnt===3) score += 50; // Blocked 3
+                            break;
+                        } else {
+                            // Empty next
+                            if (cnt===4) score += 10000; // Live 4 (Win next)
+                            else if (cnt===3) {
+                                if(!blockedPrev) score += 1000; // Live 3 (Open both ends)
+                                else score += 100; // Blocked 3
+                            }
+                            else if (cnt===2 && !blockedPrev) score += 10;
+                            break;
+                        }
                     }
-                    
-                    if (cnt === 4 && !blocked) score += 5000;
-                    else if (cnt === 3 && !blocked) score += 500;
-                    else if (cnt === 2 && !blocked) score += 50;
                 }
             }
             return score;
         }
 
-        // ... View ...
+        // ... Interaction ...
         const logic = new GameLogic();
         const logEl = document.getElementById('log-console');
         const aiLoader = document.getElementById('ai-loader');
@@ -507,13 +498,28 @@
             });
         }
 
-        window.startSingleGame = () => {
-            isOnline = false; myPlayerNum = 1; 
+        window.showSideSelection = () => {
+            document.getElementById('lobby-main').style.display='none';
+            document.getElementById('lobby-side').style.display='block';
+        };
+
+        window.startSingleGame = (playerNum) => {
+            isOnline = false; 
+            myPlayerNum = playerNum; 
             document.getElementById('lobby-overlay').style.display = 'none';
             document.getElementById('ui-layer').style.display = 'flex';
-            document.getElementById('my-player-badge').innerText = "👤 싱글 모드";
-            document.getElementById('my-player-badge').style.background = "#9b59b6";
-            document.getElementById('btn-ai-toggle').style.display = 'inline-block';
+            
+            const badge = document.getElementById('my-player-badge');
+            badge.innerText = playerNum===1 ? "👤 나: 흑 (선공)" : "👤 나: 백 (후공)";
+            badge.style.background = playerNum===1 ? "#333" : "#9b59b6";
+            
+            logic.aiMode = true; 
+            updateUI();
+
+            // 백(2)을 선택했다면, AI(1)가 먼저 둔다
+            if(myPlayerNum === 2) {
+                setTimeout(runAI, 500); 
+            }
         };
 
         window.createRoom = () => {
@@ -595,7 +601,7 @@
 
         window.toggleAIMode = () => {
             logic.aiMode = !logic.aiMode; updateUI();
-            if(!isOnline && logic.aiMode && logic.currentPlayer===2) runAI();
+            if(!isOnline && logic.aiMode && logic.currentPlayer!==myPlayerNum) runAI();
         };
         window.undo = () => { if(!isOnline && logic.undo()) { log("무르기"); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); } };
         window.resetGame = () => { if(!isOnline && confirm("초기화?")) { logic.reset(); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); log("초기화됨"); } };
