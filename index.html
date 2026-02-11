@@ -2,33 +2,78 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>대학전쟁: 블록 오목 (Legendary AI Ver.)</title>
+    <title>대학전쟁: 블록 오목 (Legendary AI Final)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; background: #dfe4ea; font-family: 'Pretendard', sans-serif; user-select: none; -webkit-touch-callout: none; }
-        #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh; z-index: 1; touch-action: none; }
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh; z-index: 10; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
         
-        .top-bar { pointer-events: auto; display: flex; flex-direction: column; gap: 8px; background: rgba(255,255,255,0.95); padding: 10px 15px; margin: 10px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh; z-index: 1; touch-action: none; }
+        
+        #ui-layer { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh; 
+            z-index: 10; pointer-events: none; 
+            display: flex; flex-direction: column; justify-content: space-between; 
+        }
+        
+        /* 상단 UI */
+        .top-bar { 
+            pointer-events: auto; 
+            display: flex; flex-direction: column; gap: 8px; 
+            background: rgba(255,255,255,0.95); 
+            padding: 12px 15px; margin: 10px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+        }
         .row-upper { display: flex; justify-content: space-between; align-items: center; width: 100%; }
         .row-lower { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 5px; }
-        .game-info { display: flex; flex-direction: column; gap: 2px; }
-        .title-row { display: flex; align-items: center; gap: 8px; }
-        .score-box { font-weight: bold; font-size: 0.95rem; margin-top: 2px; }
+        
+        .title-row { display: flex; align-items: center; gap: 8px; font-size: 1.1rem; }
+        .score-box { font-weight: bold; font-size: 1rem; }
         .p1 { color: #e74c3c; } .p2 { color: #2ecc71; } 
-        .btn-group { display: flex; gap: 5px; }
-        .btn { background: #fff; border: 1px solid #ccc; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: bold; box-shadow: 0 2px 3px rgba(0,0,0,0.05); transition: all 0.2s; }
-        .btn:active { transform: translateY(1px); }
-        .btn-hint { background: #f1c40f; border-color: #f39c12; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.2); }
+        
+        .btn { 
+            background: #fff; border: 1px solid #ccc; padding: 8px 12px; 
+            border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: bold; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s; 
+        }
+        .btn:active { transform: translateY(1px); background: #f0f0f0; }
+        .btn-hint { background: #f1c40f; border-color: #f39c12; color: #fff; }
         .btn-ai-toggle { background: #ecf0f1; color: #7f8c8d; }
         .btn-ai-toggle.active { background: #2ecc71; color: white; border-color: #27ae60; }
-        .phase-badge { font-size: 0.7rem; color: white; padding: 3px 6px; border-radius: 4px; background: #333; vertical-align: middle; }
         
-        .fab-rotate { pointer-events: auto; position: absolute; right: 20px; bottom: 30px; width: 70px; height: 70px; background: #fff; color: #333; border-radius: 50%; border: 2px solid #ddd; display: flex; justify-content: center; align-items: center; font-size: 2rem; cursor: pointer; box-shadow: 0 6px 15px rgba(0,0,0,0.2); transition: transform 0.1s; }
+        .phase-badge { 
+            font-size: 0.75rem; color: white; padding: 4px 8px; border-radius: 4px; 
+            background: #333; vertical-align: middle; 
+        }
+        
+        /* 하단 버튼들 */
+        .fab-rotate { 
+            pointer-events: auto; position: absolute; right: 20px; bottom: 30px; 
+            width: 70px; height: 70px; background: #fff; color: #333; 
+            border-radius: 50%; border: 2px solid #ddd; 
+            display: flex; justify-content: center; align-items: center; 
+            font-size: 2.2rem; cursor: pointer; 
+            box-shadow: 0 6px 15px rgba(0,0,0,0.2); 
+            transition: transform 0.1s; 
+        }
         .fab-rotate:active { transform: scale(0.95); background: #f9f9f9; }
-        .fab-rules { pointer-events: auto; position: absolute; left: 20px; bottom: 30px; width: 45px; height: 45px; background: #3498db; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         
-        .log-panel { pointer-events: none; position: absolute; left: 20px; bottom: 85px; background: rgba(0,0,0,0.6); color: #fff; width: 250px; height: 120px; border-radius: 8px; padding: 10px; overflow: hidden; font-family: monospace; font-size: 0.8rem; display: flex; flex-direction: column-reverse; text-shadow: 1px 1px 2px black; }
+        .fab-rules { 
+            pointer-events: auto; position: absolute; left: 20px; bottom: 30px; 
+            width: 45px; height: 45px; background: #3498db; color: white; 
+            border-radius: 50%; display: flex; justify-content: center; align-items: center; 
+            font-size: 1.2rem; cursor: pointer; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3); 
+        }
+        
+        .log-panel { 
+            pointer-events: none; position: absolute; left: 20px; bottom: 85px; 
+            background: rgba(0,0,0,0.6); color: #fff; 
+            width: 250px; height: 120px; border-radius: 8px; padding: 10px; 
+            overflow: hidden; font-family: monospace; font-size: 0.8rem; 
+            display: flex; flex-direction: column-reverse; 
+            text-shadow: 1px 1px 2px black; 
+        }
         
         /* 로비 화면 */
         #lobby-overlay {
@@ -37,16 +82,55 @@
             display: flex; flex-direction: column; justify-content: center; align-items: center;
             pointer-events: auto;
         }
-        .lobby-box { text-align: center; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 85%; max-width: 400px; }
-        .lobby-title { font-size: 2rem; font-weight: bold; margin-bottom: 20px; color: #2c3e50; }
-        .lobby-btn { width: 100%; padding: 15px; margin: 8px 0; font-size: 1.1rem; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; color: white; transition: transform 0.1s; }
+        .lobby-box { 
+            text-align: center; background: white; padding: 40px; 
+            border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
+            width: 85%; max-width: 400px; 
+        }
+        .lobby-title { font-size: 2rem; font-weight: bold; margin-bottom: 30px; color: #2c3e50; }
+        .lobby-btn { 
+            width: 100%; padding: 15px; margin: 10px 0; font-size: 1.1rem; 
+            border: none; border-radius: 10px; cursor: pointer; 
+            font-weight: bold; color: white; transition: transform 0.1s; 
+        }
+        .lobby-btn:active { transform: scale(0.98); }
         .btn-single { background: #9b59b6; }
         .btn-create { background: #3498db; }
         .btn-join { background: #2ecc71; }
-        .lobby-input { width: 100%; padding: 12px; margin: 10px 0; font-size: 1.1rem; border: 2px solid #ddd; border-radius: 10px; box-sizing: border-box; text-align: center; }
+        .lobby-input { 
+            width: 100%; padding: 12px; margin: 10px 0; font-size: 1.2rem; 
+            border: 2px solid #ddd; border-radius: 10px; 
+            box-sizing: border-box; text-align: center; letter-spacing: 2px;
+        }
         
-        #ai-loader { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); color: white; padding: 15px 25px; border-radius: 30px; font-weight: bold; z-index: 50; pointer-events: none; }
-        #my-player-badge { font-size: 0.9rem; font-weight: bold; padding: 5px 10px; border-radius: 15px; margin-top: 5px; display: inline-block; }
+        #ai-loader { 
+            display: none; position: absolute; top: 50%; left: 50%; 
+            transform: translate(-50%, -50%); 
+            background: rgba(0,0,0,0.8); color: white; 
+            padding: 15px 30px; border-radius: 30px; 
+            font-weight: bold; font-size: 1.2rem; z-index: 50; 
+            pointer-events: none; backdrop-filter: blur(5px);
+        }
+        
+        #my-player-badge { 
+            font-size: 0.9rem; font-weight: bold; padding: 6px 12px; 
+            border-radius: 20px; display: inline-block; 
+        }
+
+        /* 모달창 */
+        .modal-overlay { 
+            pointer-events: auto; position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 300; 
+        }
+        .modal-content { 
+            background: white; width: 85%; max-width: 500px; max-height: 85%; 
+            border-radius: 12px; padding: 25px; overflow-y: auto; position: relative; 
+        }
+        .close-btn { position: absolute; top: 15px; right: 20px; font-size: 1.5rem; cursor: pointer; color: #888; }
+        h3 { margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .rule-sec { margin-bottom: 15px; }
+        .rule-head { font-weight: bold; color: #2c3e50; margin-bottom: 5px; }
+        .rule-desc { font-size: 0.9rem; color: #555; line-height: 1.5; }
     </style>
 
     <script type="importmap">
@@ -57,27 +141,27 @@
 
     <div id="lobby-overlay">
         <div class="lobby-box">
-            <div class="lobby-title">🎲 블록 오목 (Legendary)</div>
+            <div class="lobby-title">🎲 블록 오목 <span style="font-size:1rem; color:#e74c3c;">(Legendary)</span></div>
             <div id="lobby-main">
                 <button class="lobby-btn btn-single" onclick="startSingleGame()">👤 싱글 / AI 연습</button>
-                <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+                <div style="margin: 20px 0; border-top: 1px solid #eee;"></div>
                 <div style="font-size:0.9rem; color:#666; margin-bottom:10px;">온라인 멀티플레이</div>
                 <button class="lobby-btn btn-create" onclick="createRoom()">방 만들기 (Host)</button>
                 <div style="margin: 10px 0; color: #888; font-size:0.8rem;">- 또는 -</div>
-                <input type="text" id="room-code-input" class="lobby-input" placeholder="참여 코드 4자리" maxlength="4">
+                <input type="text" id="room-code-input" class="lobby-input" placeholder="코드 4자리 입력" maxlength="4">
                 <button class="lobby-btn btn-join" onclick="joinRoom()">방 참가하기 (Join)</button>
             </div>
             <div id="lobby-wait" style="display:none;">
-                <div style="font-size:1.2rem; margin-bottom:15px;">방 코드: <span id="display-room-code" style="color:#e74c3c; font-weight:bold; font-size:1.8rem;"></span></div>
-                <div>친구에게 코드를 알려주세요.</div>
-                <div style="margin-top:20px;">접속 대기 중...</div>
-                <button class="btn" onclick="location.reload()" style="margin-top:20px;">취소</button>
+                <div style="font-size:1.2rem; margin-bottom:15px;">방 코드: <span id="display-room-code" style="color:#e74c3c; font-weight:bold; font-size:2rem; letter-spacing:3px;"></span></div>
+                <div style="color:#555;">친구에게 이 코드를 알려주세요.</div>
+                <div style="margin-top:30px;">⏳ 접속 대기 중...</div>
+                <button class="btn" onclick="location.reload()" style="margin-top:20px; width:100%;">취소</button>
             </div>
         </div>
     </div>
 
     <div id="game-canvas"></div>
-    <div id="ai-loader">🤖 AI 뇌 가동중...</div>
+    <div id="ai-loader">🧠 AI가 최적의 수를 계산 중...</div>
 
     <div id="ui-layer" style="display:none;">
         <div class="top-bar">
@@ -91,12 +175,12 @@
                         <span class="p1">흑: <span id="p1-cnt">4</span></span>
                         <span style="margin:0 5px; color:#ccc">|</span>
                         <span class="p2">백: <span id="p2-cnt">4</span></span>
-                        <span id="turn-indicator" style="font-size:0.8rem; margin-left:5px; color:#e74c3c;">(흑 차례)</span>
+                        <span id="turn-indicator" style="font-size:0.9rem; margin-left:5px; color:#e74c3c;">(흑 차례)</span>
                     </div>
                 </div>
                 <div class="btn-group">
-                    <button class="btn" onclick="window.undo()">↩️</button>
-                    <button class="btn" onclick="window.resetGame()">🔄</button>
+                    <button class="btn" onclick="window.undo()">↩️ 무르기</button>
+                    <button class="btn" onclick="window.resetGame()">🔄 초기화</button>
                 </div>
             </div>
             <div class="row-lower">
@@ -106,6 +190,7 @@
             </div>
         </div>
         <div class="log-panel" id="log-console"><div>🚀 게임 시작!</div></div>
+        
         <div class="fab-rotate" id="btn-rotate">↻</div>
         <div class="fab-rules" onclick="document.getElementById('rule-modal').style.display='flex'">?</div>
     </div>
@@ -113,10 +198,10 @@
     <div id="rule-modal" class="modal-overlay" onclick="if(event.target===this) this.style.display='none'">
         <div class="modal-content">
             <span class="close-btn" onclick="document.getElementById('rule-modal').style.display='none'">&times;</span>
-            <h3>📜 게임 규칙 상세</h3>
+            <h3>📜 게임 규칙</h3>
             <div class="rule-sec"><div class="rule-head">1. 승리 조건</div><div class="rule-desc">자신의 색깔 블록 5개가 연속(가로, 세로, 대각선)되면 승리합니다.</div></div>
-            <div class="rule-sec"><div class="rule-head">2. 착수 규칙</div><div class="rule-desc">- <b>접지:</b> 3칸(눕힘) 또는 1칸(세움)이 바닥에 닿아야 함.<br>- <b>지지:</b> 2층 이상은 아래 블록 필요.<br>- <b>금지:</b> 시작 2턴간 귀퉁이 불가.</div></div>
-            <div class="rule-sec"><div class="rule-head">3. 이동 단계</div><div class="rule-desc">- 블록 4개를 다 쓰면 이동 단계.<br>- 자기 블록을 들어서 이동.<br>- 위에 블록이 있으면 못 뺌.</div></div>
+            <div class="rule-sec"><div class="rule-head">2. 착수 규칙</div><div class="rule-desc">- <b>접지:</b> 3칸(눕힘) 또는 1칸(세움)이 반드시 바닥에 닿아야 합니다.<br>- <b>지지:</b> 2층 이상은 바로 아래에 블록이 있어야 합니다.<br>- <b>금지:</b> 시작 후 각자 2턴간은 귀퉁이에 둘 수 없습니다.</div></div>
+            <div class="rule-sec"><div class="rule-head">3. 이동 단계</div><div class="rule-desc">- 블록 4개를 모두 쓰면 이동 단계가 됩니다.<br>- 자신의 블록을 들어서 다른 곳으로 옮겨야 합니다.<br>- 위에 다른 블록이 얹혀있는 블록은 뺄 수 없습니다.</div></div>
         </div>
     </div>
 
@@ -128,18 +213,18 @@
         import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
         // =========================================================
-        // 🔥 아까 찾은 Firebase 설정 코드를 여기에 다시 붙여넣으세요 🔥
+        // 🔥 Firebase Config 🔥
         // =========================================================
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_PROJECT.firebaseapp.com",
-            databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT.appspot.com",
-            messagingSenderId: "123456789",
-            appId: "1:123456789:web:abcdef"
+            apiKey: "AIzaSyC6I8D1aazjTGBJdwQ1iHsQYyHXWHf3_PU",
+            authDomain: "omok-game-95008.firebaseapp.com",
+            databaseURL: "https://omok-game-95008-default-rtdb.firebaseio.com",
+            projectId: "omok-game-95008",
+            storageBucket: "omok-game-95008.firebasestorage.app",
+            messagingSenderId: "34601684939",
+            appId: "1:34601684939:web:4ed1cc9a0c653d9783b04e",
+            measurementId: "G-XHNPPYPNQT"
         };
-        // =========================================================
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
@@ -148,7 +233,9 @@
         let myPlayerNum = 0; 
         let isOnline = false;
 
-        // --- Neural Network AI Class (Deep Learning) ---
+        // =========================================================
+        // 🧠 Deep Learning AI Engine (Neural Network)
+        // =========================================================
         class NeuralAI {
             constructor() {
                 this.weights = null;
@@ -158,18 +245,22 @@
             async load() {
                 try {
                     const res = await fetch('./legendary_ai.json');
+                    if (!res.ok) throw new Error("File not found");
                     this.weights = await res.json();
                     this.ready = true;
-                    console.log("🧠 전설적인 AI 두뇌 로드 완료 (512x512)");
+                    console.log("🧠 전설적인 AI 두뇌 로드 완료 (Size: 512)");
                 } catch (e) {
-                    console.error("AI 파일 로드 실패. (Live Server 필요)", e);
+                    console.error("AI 로드 실패:", e);
+                    log("⚠️ AI 파일을 찾을 수 없습니다. (legendary_ai.json)");
                 }
             }
 
+            // 보드 상태를 입력받아 200개 행동의 점수를 반환
             predict(board) {
                 if (!this.ready) return null;
 
-                // 1. Flatten Input
+                // 1. Flatten Input (5x5x5 -> 125 array)
+                // 중요: Python 학습 환경과 순서가 일치해야 함.
                 let input = [];
                 for (let z=0; z<5; z++) {
                     for (let y=0; y<5; y++) {
@@ -179,8 +270,8 @@
                     }
                 }
 
-                // 2. Neural Network Forward Pass (ReLU Activation)
-                // Layer 1 (Input -> 512)
+                // 2. Feed Forward
+                // Layer 1 (125 -> 512)
                 let h1 = this.matMul(input, this.weights.fc0_w, this.weights.fc0_b);
                 h1 = h1.map(x => Math.max(0, x)); // ReLU
 
@@ -188,29 +279,28 @@
                 let h2 = this.matMul(h1, this.weights.fc1_w, this.weights.fc1_b);
                 h2 = h2.map(x => Math.max(0, x)); // ReLU
 
-                // Output Layer (512 -> 200 Actions)
+                // Output Layer (512 -> 200)
                 let output = this.matMul(h2, this.weights.fc2_w, this.weights.fc2_b);
                 
                 return output; 
             }
 
-            matMul(input, weightMatrix, biasVector) {
-                const outputSize = biasVector.length;
-                const inputSize = input.length;
-                let result = new Array(outputSize).fill(0);
-                // Simple Matrix Multiplication
-                for (let i = 0; i < outputSize; i++) {
+            matMul(input, W, b) {
+                const outDim = b.length;
+                const inDim = input.length;
+                let res = new Array(outDim).fill(0);
+                for (let i = 0; i < outDim; i++) {
                     let sum = 0;
-                    for (let j = 0; j < inputSize; j++) {
-                        sum += input[j] * weightMatrix[i][j];
+                    for (let j = 0; j < inDim; j++) {
+                        sum += input[j] * W[i][j];
                     }
-                    result[i] = sum + biasVector[i];
+                    res[i] = sum + b[i];
                 }
-                return result;
+                return res;
             }
         }
 
-        // --- Helper to decode AI Action ID ---
+        // Action Decoder
         function decodeAction(actionId) {
             const shapeIdx = actionId % 8;
             const posIdx = Math.floor(actionId / 8);
@@ -219,65 +309,9 @@
             return { x, y, shapeIdx };
         }
 
-        // --- Lobby & Network ---
-        window.startSingleGame = () => {
-            isOnline = false;
-            myPlayerNum = 1; 
-            document.getElementById('lobby-overlay').style.display = 'none';
-            document.getElementById('ui-layer').style.display = 'flex';
-            document.getElementById('my-player-badge').innerText = "👤 싱글 모드";
-            document.getElementById('my-player-badge').style.background = "#9b59b6";
-            document.getElementById('btn-ai-toggle').style.display = 'inline-block';
-        };
-
-        window.createRoom = () => {
-            const code = Math.floor(1000 + Math.random() * 9000).toString();
-            myRoomId = code;
-            myPlayerNum = 1; 
-            set(ref(db, 'rooms/' + code), { status: 'waiting', board: logic.serialize() });
-            document.getElementById('lobby-main').style.display = 'none';
-            document.getElementById('lobby-wait').style.display = 'block';
-            document.getElementById('display-room-code').innerText = code;
-            onValue(ref(db, 'rooms/' + code + '/status'), (snap) => {
-                if (snap.val() === 'playing') startGameMulti(1);
-            });
-        };
-
-        window.joinRoom = () => {
-            const code = document.getElementById('room-code-input').value;
-            get(child(ref(db), 'rooms/' + code)).then((snap) => {
-                if (snap.exists()) {
-                    myRoomId = code;
-                    myPlayerNum = 2; 
-                    update(ref(db, 'rooms/' + code), { status: 'playing' });
-                    startGameMulti(2);
-                } else alert("방 없음");
-            });
-        };
-
-        function startGameMulti(pNum) {
-            document.getElementById('lobby-overlay').style.display = 'none';
-            document.getElementById('ui-layer').style.display = 'flex';
-            isOnline = true;
-            document.getElementById('btn-ai-toggle').style.display = 'none';
-            const badge = document.getElementById('my-player-badge');
-            badge.innerText = pNum===1 ? "🌐 Host (흑)" : "🌐 Guest (백)";
-            badge.style.background = pNum===1 ? "#e74c3c" : "#2ecc71";
-            
-            onValue(ref(db, 'rooms/' + myRoomId + '/board'), (snap) => {
-                if (snap.val()) {
-                    logic.deserialize(snap.val());
-                    renderBoard(); updateUI();
-                    if(logic.winner!==0) setTimeout(()=>alert("게임 종료"), 100);
-                }
-            });
-        }
-
-        function sendMove() {
-            if (isOnline) set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize());
-        }
-
-        // --- Game Logic ---
+        // =========================================================
+        // 🎮 Game Logic
+        // =========================================================
         const SHAPES = [
             [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:1,z:0}], [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:-1,z:0}],
             [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:-1,z:0}], [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:1,z:0}],
@@ -287,29 +321,44 @@
 
         class GameLogic {
             constructor() { this.reset(); }
+            
             reset() {
                 this.board = Array.from({length: 5}, () => Array.from({length: 5}, () => Array(5).fill(0)));
-                this.blocks = []; this.history = []; this.turnCount = 0; this.currentPlayer = 1;
-                this.blocksLeft = { 1: 4, 2: 4 }; this.phase = 'PLACEMENT'; this.winner = 0;
-                this.initFixedBlocks(); this.aiMode = false;
-            }
-            serialize() {
-                return { board: this.board, blocks: this.blocks, turnCount: this.turnCount, currentPlayer: this.currentPlayer, blocksLeft: this.blocksLeft, phase: this.phase, winner: this.winner };
-            }
-            deserialize(data) {
-                Object.assign(this, data);
-            }
-            initFixedBlocks() {
                 this.blocks = []; 
+                this.history = []; 
+                this.turnCount = 0;
+                this.currentPlayer = 1; 
+                this.blocksLeft = { 1: 4, 2: 4 }; 
+                this.phase = 'PLACEMENT'; 
+                this.winner = 0;
+                this.initFixedBlocks();
+                this.aiMode = false;
+                this.selectedBlock = null;
+                this.selectedBlockOriginalCells = null;
+            }
+
+            serialize() {
+                return {
+                    board: this.board, blocks: this.blocks, turnCount: this.turnCount,
+                    currentPlayer: this.currentPlayer, blocksLeft: this.blocksLeft,
+                    phase: this.phase, winner: this.winner
+                };
+            }
+            deserialize(data) { Object.assign(this, data); }
+
+            initFixedBlocks() {
+                this.blocks = [];
                 this.board = Array.from({length: 5}, () => Array.from({length: 5}, () => Array(5).fill(0)));
                 this.addBlock(1, [{x:1, y:3, z:0}, {x:2, y:3, z:0}, {x:1, y:2, z:0}], 0, true);
                 this.addBlock(2, [{x:2, y:1, z:0}, {x:3, y:1, z:0}, {x:3, y:2, z:0}], 0, true);
             }
+
             addBlock(player, cells, shapeIdx, isFixed=false) {
                 const blockId = Date.now() + Math.random();
                 this.blocks.push({ id: blockId, player, cells, shapeIdx, isFixed });
                 cells.forEach(c => this.board[c.z][c.y][c.x] = player);
             }
+
             removeBlock(blockId) {
                 const idx = this.blocks.findIndex(b => b.id === blockId);
                 if (idx > -1) {
@@ -320,6 +369,7 @@
                 }
                 return null;
             }
+
             canPick(block) {
                 if (block.isFixed) return false;
                 for (let c of block.cells) {
@@ -331,17 +381,22 @@
                 }
                 return true;
             }
+
             pickBlock(x, y, z) {
                 const block = this.blocks.find(b => b.player === this.currentPlayer && !b.isFixed && b.cells.some(c => c.x===x && c.y===y && c.z===z));
-                if (!block) return { ok: false, msg: "내 블록 아님" };
-                if (!this.canPick(block)) return { ok: false, msg: "위에 블록 있음" };
+                if (!block) return { ok: false, msg: "내 블록이 아닙니다." };
+                if (!this.canPick(block)) return { ok: false, msg: "위에 블록이 있어 뺄 수 없습니다." };
+                
+                this.saveState();
                 this.selectedBlockOriginalCells = JSON.parse(JSON.stringify(block.cells));
                 this.removeBlock(block.id);
                 this.selectedBlock = block;
                 return { ok: true, block: block };
             }
+
             checkValidity(player, cells, isMovement=false, originalCells=null) {
-                if (this.winner !== 0) return { ok: false };
+                if (this.winner !== 0) return { ok: false, msg: "게임 종료됨" };
+                
                 const origin = originalCells || (isMovement && this.selectedBlockOriginalCells ? this.selectedBlockOriginalCells : null);
                 if (isMovement && origin) {
                     const cSet = new Set(cells.map(c=>`${c.x},${c.y},${c.z}`));
@@ -349,47 +404,61 @@
                     if (cSet.size === oSet.size) {
                         let same = true; 
                         for(let k of cSet) if(!oSet.has(k)) { same=false; break; }
-                        if(same) return { ok:false, msg:"제자리 불가" };
+                        if(same) return { ok:false, msg:"제자리로 이동할 수 없습니다." };
                     }
                 }
+
                 for(let c of cells) {
-                    if(c.x<0||c.x>4||c.y<0||c.y>4||c.z<0||c.z>4) return {ok:false, msg:"범위 초과"};
-                    if(this.board[c.z][c.y][c.x]!==0) return {ok:false, msg:"이미 있음"};
+                    if(c.x<0||c.x>4||c.y<0||c.y>4||c.z<0||c.z>4) return {ok:false, msg:"판을 벗어났습니다."};
+                    if(this.board[c.z][c.y][c.x]!==0) return {ok:false, msg:"이미 블록이 있습니다."};
                 }
+
                 if (!isMovement && this.turnCount < 2) {
                     const restricted = ["0,3","0,4","1,4","3,0","4,0","4,1"];
-                    if(cells.some(c=>c.z===0 && restricted.includes(`${c.x},${c.y}`))) return {ok:false, msg:"금지 구역"};
+                    if(cells.some(c=>c.z===0 && restricted.includes(`${c.x},${c.y}`))) return {ok:false, msg:"초반 금지 구역입니다."};
                 }
-                if ([1,3].indexOf(cells.filter(c=>c.z===0).length) === -1) return {ok:false, msg:"접지 위반"};
+                
+                const groundContacts = cells.filter(c=>c.z===0).length;
+                if (groundContacts !== 3 && groundContacts !== 1) return {ok:false, msg:"바닥에는 1칸(세움) 또는 3칸(눕힘)이 닿아야 합니다."};
+
                 for(let c of cells) {
                     if(c.z>0) {
                         const hasSup = this.board[c.z-1][c.y][c.x]!==0;
                         const isSelf = cells.some(sc=>sc.x===c.x && sc.y===c.y && sc.z===c.z-1);
-                        if(!hasSup && !isSelf) return {ok:false, msg:"지지대 필요"};
+                        if(!hasSup && !isSelf) return {ok:false, msg:"아래에 지지대가 필요합니다."};
                     }
                 }
-                return {ok:true};
+                return {ok:true, msg:"가능"};
             }
+
             confirmMove(cells, shapeIdx) {
                 if (this.phase === 'PLACEMENT') {
+                    if(!isOnline) this.saveState();
                     this.addBlock(this.currentPlayer, cells, shapeIdx);
                     this.blocksLeft[this.currentPlayer]--;
                 } else {
                     this.addBlock(this.currentPlayer, cells, shapeIdx);
                     this.selectedBlock = null;
+                    this.selectedBlockOriginalCells = null;
                 }
                 this.winner = this.checkWin();
+                
                 if (this.winner === 0) {
                     this.turnCount++;
                     this.currentPlayer = this.currentPlayer===1 ? 2:1;
+                    
                     if (this.blocksLeft[1] === 0 && this.blocksLeft[2] === 0) this.phase = 'MOVEMENT';
                     else if (this.blocksLeft[this.currentPlayer] === 0 && this.phase === 'PLACEMENT') this.phase = 'MOVEMENT';
                     
-                    if(!isOnline && this.aiMode && this.currentPlayer===2) runAI();
+                    // 싱글모드 AI 턴
+                    if (!isOnline && this.aiMode && this.currentPlayer === 2) {
+                        runAI();
+                    }
                 }
                 sendMove();
                 return this.winner;
             }
+
             checkWin() {
                 const topMap = Array.from({length: 5}, () => Array(5).fill(0));
                 for(let y=0; y<5; y++) for(let x=0; x<5; x++) for(let z=4; z>=0; z--) if(this.board[z][y][x]!==0) { topMap[y][x]=this.board[z][y][x]; break; }
@@ -406,10 +475,113 @@
                 }
                 return 0;
             }
-            undo() { if(this.history.length===0) return false; return false; /* 멀티땜에 미구현 */ }
+
+            saveState() {
+                if(isOnline) return; // 멀티는 서버가 state
+                const s = {
+                    board: JSON.parse(JSON.stringify(this.board)),
+                    blocks: JSON.parse(JSON.stringify(this.blocks)),
+                    turnCount: this.turnCount, currentPlayer: this.currentPlayer,
+                    blocksLeft: {...this.blocksLeft}, phase: this.phase, winner: this.winner
+                };
+                this.history.push(s);
+            }
+            undo() {
+                if(this.history.length===0) return false;
+                const s = this.history.pop();
+                Object.assign(this, s);
+                this.selectedBlock = null; 
+                this.selectedBlockOriginalCells = null;
+                return true;
+            }
         }
 
-        // --- Interaction ---
+        // =========================================================
+        // 🧠 AI Search Logic (Fix for Movement)
+        // =========================================================
+        async function getAIMove() {
+            if (!ai.ready) { log("🧠 AI 준비 중..."); return null; }
+            aiLoader.style.display = 'block';
+
+            // 1. NN 예측 (점수 계산)
+            // AI는 "현재 상태"를 보고 "어디에 두면(Target) 좋은지" 점수를 매깁니다.
+            const scores = ai.predict(logic.board);
+            if (!scores) return null;
+
+            // 2. 점수 높은 순으로 정렬 (Best Candidates)
+            const candidates = scores.map((val, idx) => ({ idx, val })).sort((a, b) => b.val - a.val);
+
+            let bestMove = null;
+
+            // 3. 유효한 수 찾기
+            if (logic.phase === 'PLACEMENT') {
+                for (let c of candidates) {
+                    const {x, y, shapeIdx} = decodeAction(c.idx);
+                    const sh = SHAPES[shapeIdx];
+                    const cells = sh.map(d => ({x: x+d.x, y: y+d.y, z: d.z}));
+                    if (logic.checkValidity(logic.currentPlayer, cells).ok) {
+                        bestMove = { type: 'place', cells, shapeIdx };
+                        break;
+                    }
+                }
+            } else {
+                // [이동 단계 핵심 로직 수정]
+                // AI는 Target(목표지점)만 추천해줍니다.
+                // 우리는 "내가 가진 블록 중 하나라도 저기로 갈 수 있는지" 확인해야 합니다.
+                
+                const myBlocks = logic.blocks.filter(b => b.player === logic.currentPlayer && !b.isFixed);
+                
+                // 후보지(Target) 순회
+                for (let c of candidates) {
+                    // 점수가 너무 낮으면(확신이 없으면) 그만 둡니다 (최적화)
+                    // if (c.val < 0) break; // 필요시 주석 해제
+
+                    const targetAction = decodeAction(c.idx);
+                    const sh = SHAPES[targetAction.shapeIdx];
+                    const targetCells = sh.map(d => ({x: targetAction.x+d.x, y: targetAction.y+d.y, z: d.z}));
+
+                    // 내 블록들을 하나씩 빼보는 시뮬레이션
+                    for (let b of myBlocks) {
+                        if (!logic.canPick(b)) continue;
+
+                        // 시뮬레이션: 잠시 제거
+                        const originalCells = JSON.parse(JSON.stringify(b.cells));
+                        logic.removeBlock(b.id); 
+
+                        // 유효성 체크
+                        if (logic.checkValidity(logic.currentPlayer, targetCells, true, originalCells).ok) {
+                            // 찾았다! 이 블록(b)을 저기(targetCells)로 옮기면 됨!
+                            bestMove = { 
+                                type: 'move', 
+                                fromId: b.id, 
+                                cells: targetCells, 
+                                shapeIdx: targetAction.shapeIdx 
+                            };
+                            
+                            // 복구 (ID가 바뀔 수 있으므로 주의해서 복구)
+                            logic.addBlock(logic.currentPlayer, originalCells, b.shapeIdx, false);
+                            // 원래 ID로 되돌려놓아야 다음 루프에서 문제 없음
+                            logic.blocks[logic.blocks.length-1].id = b.id; 
+                            
+                            break; // 블록 루프 탈출
+                        }
+
+                        // 복구
+                        logic.addBlock(logic.currentPlayer, originalCells, b.shapeIdx, false);
+                        logic.blocks[logic.blocks.length-1].id = b.id; 
+                    }
+
+                    if (bestMove) break; // 후보지 루프 탈출 (최적의 수를 찾았으므로)
+                }
+            }
+
+            aiLoader.style.display = 'none';
+            return bestMove;
+        }
+
+        // =========================================================
+        // View & Setup
+        // =========================================================
         const ai = new NeuralAI();
         ai.load();
         
@@ -452,8 +624,10 @@
             document.getElementById('p2-cnt').innerText = logic.blocksLeft[2];
             document.getElementById('turn-indicator').innerText = logic.currentPlayer===1?"(흑 차례)":"(백 차례)";
             document.getElementById('turn-indicator').style.color = logic.currentPlayer===1?"#e74c3c":"#2ecc71";
-            document.getElementById('game-phase').innerText = logic.phase==='MOVEMENT'?"이동":"착수";
+            const phaseTxt = logic.phase==='MOVEMENT'?"이동":"착수";
+            document.getElementById('game-phase').innerText = phaseTxt;
             document.getElementById('game-phase').style.background = logic.phase==='MOVEMENT'?"#e67e22":"#333";
+            
             const btn = document.getElementById('btn-ai-toggle');
             btn.innerText = logic.aiMode ? "🤖 AI 대전: ON" : "🤖 AI 대전: OFF";
             logic.aiMode ? btn.classList.add('active') : btn.classList.remove('active');
@@ -471,7 +645,7 @@
                     const m = new THREE.Mesh(geo, mat); m.position.set(c.x-2, c.z+0.5, c.y-2);
                     m.castShadow=true; m.receiveShadow=true; m.userData={id:b.id, parentGroup:grp}; grp.add(m);
                 });
-                // Bridge
+                // Bridges
                 for(let i=0; i<b.cells.length; i++) for(let j=i+1; j<b.cells.length; j++) {
                     const c1=b.cells[i], c2=b.cells[j];
                     if(Math.abs(c1.x-c2.x)+Math.abs(c1.y-c2.y)+Math.abs(c1.z-c2.z)===1) {
@@ -493,6 +667,7 @@
             if(isOnline && logic.currentPlayer!==myPlayerNum) return;
             if(logic.phase==='MOVEMENT' && !logic.selectedBlock) return;
             if(hoverX===-1) return;
+            
             const sh = SHAPES[currentShapeIdx%8];
             const cells = sh.map(c=>({x:hoverX+c.x, y:hoverY+c.y, z:c.z}));
             const chk = logic.checkValidity(logic.currentPlayer, cells, logic.phase==='MOVEMENT');
@@ -508,13 +683,111 @@
             });
         }
 
-        const ray = new THREE.Raycaster(); const mouse = new THREE.Vector2();
+        // --- Event Listeners ---
+        window.startSingleGame = () => {
+            isOnline = false; myPlayerNum = 1; 
+            document.getElementById('lobby-overlay').style.display = 'none';
+            document.getElementById('ui-layer').style.display = 'flex';
+            document.getElementById('my-player-badge').innerText = "👤 싱글 모드";
+            document.getElementById('my-player-badge').style.background = "#9b59b6";
+            document.getElementById('btn-ai-toggle').style.display = 'inline-block';
+        };
+
+        window.createRoom = () => {
+            const code = Math.floor(1000 + Math.random() * 9000).toString();
+            myRoomId = code; myPlayerNum = 1; 
+            set(ref(db, 'rooms/' + code), { status: 'waiting', board: logic.serialize() });
+            document.getElementById('lobby-main').style.display = 'none';
+            document.getElementById('lobby-wait').style.display = 'block';
+            document.getElementById('display-room-code').innerText = code;
+            onValue(ref(db, 'rooms/' + code + '/status'), (snap) => {
+                if (snap.val() === 'playing') startGameMulti(1);
+            });
+        };
+
+        window.joinRoom = () => {
+            const code = document.getElementById('room-code-input').value;
+            get(child(ref(db), 'rooms/' + code)).then((snap) => {
+                if (snap.exists()) {
+                    myRoomId = code; myPlayerNum = 2; 
+                    update(ref(db, 'rooms/' + code), { status: 'playing' });
+                    startGameMulti(2);
+                } else alert("방 없음");
+            });
+        };
+
+        function startGameMulti(pNum) {
+            document.getElementById('lobby-overlay').style.display = 'none';
+            document.getElementById('ui-layer').style.display = 'flex';
+            isOnline = true;
+            document.getElementById('btn-ai-toggle').style.display = 'none';
+            const badge = document.getElementById('my-player-badge');
+            badge.innerText = pNum===1 ? "🌐 Host (흑)" : "🌐 Guest (백)";
+            badge.style.background = pNum===1 ? "#e74c3c" : "#2ecc71";
+            onValue(ref(db, 'rooms/' + myRoomId + '/board'), (snap) => {
+                if (snap.val()) {
+                    logic.deserialize(snap.val());
+                    renderBoard(); updateUI();
+                    if(logic.winner!==0) setTimeout(()=>alert("게임 종료"), 100);
+                }
+            });
+        }
+
+        function sendMove() {
+            if (isOnline) set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize());
+        }
+
+        window.askAI = async () => {
+            if(logic.winner!==0) return;
+            const move = await getAIMove();
+            if(move) {
+                while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]);
+                if(move.type==='move') {
+                    const src = logic.blocks.find(b=>b.id===move.fromId);
+                    if(src) drawGhost(src.cells, 0xff4444, hintGroup, 0.6);
+                    log("⚠️ [힌트] 빨강 -> 노랑 이동");
+                } else log("💡 [힌트] 노랑 위치 착수");
+                drawGhost(move.cells, 0xf1c40f, hintGroup, 0.8);
+            } else log("AI: 둘 곳이 없어요.");
+        };
+
+        async function runAI() {
+            const move = await getAIMove();
+            if(move) {
+                if(move.type==='place') logic.confirmMove(move.cells, move.shapeIdx);
+                else {
+                    const b = logic.blocks.find(x=>x.id===move.fromId);
+                    if(b) {
+                        logic.selectedBlockOriginalCells = JSON.parse(JSON.stringify(b.cells));
+                        logic.removeBlock(b.id); logic.selectedBlock = b;
+                        logic.confirmMove(move.cells, move.shapeIdx);
+                    }
+                }
+                log("AI 착수 완료"); renderBoard(); updateUI(); updateGhost();
+            } else {
+                log("AI 기권 (둘 곳 없음)");
+            }
+        }
+
+        window.toggleAIMode = () => {
+            logic.aiMode = !logic.aiMode; updateUI();
+            if(!isOnline && logic.aiMode && logic.currentPlayer===2) runAI();
+        };
+        window.undo = () => { if(!isOnline && logic.undo()) { log("무르기"); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); } };
+        window.resetGame = () => { if(!isOnline && confirm("초기화?")) { logic.reset(); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); log("초기화됨"); } };
+        
+        // Key Listeners
+        window.addEventListener('keydown', (e) => { 
+            if(e.code==='KeyR') { currentShapeIdx++; updateGhost(); } 
+            if(e.code==='KeyZ') window.undo();
+        });
+        
+        // Mouse Listeners
+        const ray = new THREE.Raycaster(); const mouse = new THREE.Vector2(); let downTime=0;
         window.addEventListener('mousemove', e=>{
             mouse.x=(e.clientX/window.innerWidth)*2-1; mouse.y=-(e.clientY/window.innerHeight)*2+1;
             ray.setFromCamera(mouse, camera);
-            
             if(isOnline && logic.currentPlayer!==myPlayerNum) return;
-
             if(logic.phase==='MOVEMENT' && !logic.selectedBlock) {
                 const ints = ray.intersectObjects(boardGroup.children, true);
                 if(ints.length>0) {
@@ -531,15 +804,12 @@
                 } else { hoverX=-1; updateGhost(); }
             } else { hoverX=-1; updateGhost(); }
         });
-
         window.addEventListener('mousedown', ()=>downTime=Date.now());
         window.addEventListener('mouseup', ()=>{ if(Date.now()-downTime<250) click(); });
-        let downTime=0;
-        document.getElementById('btn-rotate').addEventListener('click', e=>{ e.stopPropagation(); currentShapeIdx++; updateGhost(); });
-
+        
         function click() {
             if(logic.winner!==0) return;
-            if(isOnline && logic.currentPlayer!==myPlayerNum) return;
+            if(isOnline && logic.currentPlayer!==myPlayerNum) { log("상대방 턴입니다."); return; }
             while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]);
 
             if(logic.phase==='MOVEMENT' && !logic.selectedBlock) {
@@ -563,107 +833,10 @@
                 } else log(chk.msg);
             }
         }
-
-        // --- AI Logic Integration ---
-        async function getAIMove() {
-            if(!ai.ready) { log("AI 로딩중..."); return null; }
-            aiLoader.style.display = 'block';
-            
-            // 1. 현재 보드 상태로 추론 (점수 계산)
-            const scores = ai.predict(logic.board);
-            
-            // 2. 점수 높은 순으로 정렬
-            const candidates = scores.map((val, idx) => ({ idx, val })).sort((a, b) => b.val - a.val);
-            
-            // 3. 유효한 수 찾기
-            let bestMove = null;
-            
-            if (logic.phase === 'PLACEMENT') {
-                for (let c of candidates) {
-                    const {x, y, shapeIdx} = decodeAction(c.idx);
-                    const sh = SHAPES[shapeIdx];
-                    const cells = sh.map(d=>({x:x+d.x, y:y+d.y, z:d.z}));
-                    if(logic.checkValidity(logic.currentPlayer, cells).ok) {
-                        bestMove = { type:'place', cells, shapeIdx };
-                        break; 
-                    }
-                }
-            } else {
-                // Movement: 내 블록들을 하나씩 빼보고(simulation), 갈 수 있는 가장 높은 점수 위치 찾기
-                const myBlocks = logic.blocks.filter(b => b.player === logic.currentPlayer && !b.isFixed);
-                let maxScore = -Infinity;
-                
-                for (let b of myBlocks) {
-                    if(!logic.canPick(b)) continue;
-                    
-                    // 임시 제거
-                    const originalCells = JSON.parse(JSON.stringify(b.cells));
-                    logic.removeBlock(b.id); 
-                    
-                    // 점수 높은 곳 부터 체크
-                    for (let c of candidates) {
-                        if (c.val <= maxScore) break; // 이미 찾은 수보다 점수 낮으면 스킵 (최적화)
-                        
-                        const {x, y, shapeIdx} = decodeAction(c.idx);
-                        const sh = SHAPES[shapeIdx];
-                        const cells = sh.map(d=>({x:x+d.x, y:y+d.y, z:d.z}));
-                        
-                        // 유효성 체크 (isMovement=true)
-                        if(logic.checkValidity(logic.currentPlayer, cells, true, originalCells).ok) {
-                            maxScore = c.val;
-                            bestMove = { type:'move', fromId:b.id, cells, shapeIdx, score: c.val };
-                            break; // 이 블록으로는 이게 최선 (점수 정렬되어 있으므로)
-                        }
-                    }
-                    // 복구 (주의: ID 변경됨, 하지만 Loop 내에선 영향 없음)
-                    logic.addBlock(logic.currentPlayer, originalCells, b.shapeIdx, false);
-                    // *중요* addBlock으로 복구하면 ID가 바뀌어서 다음 loop의 logic.blocks에 영향 줄 수 있음.
-                    // 원래 ID로 복구해야 함.
-                    logic.blocks[logic.blocks.length-1].id = b.id; 
-                }
-            }
-            
-            aiLoader.style.display = 'none';
-            return bestMove;
-        }
-
-        window.askAI = async () => {
-            if(logic.winner!==0) return;
-            const move = await getAIMove();
-            if(move) {
-                while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]);
-                if(move.type==='move') {
-                    const src = logic.blocks.find(b=>b.id===move.fromId);
-                    if(src) drawGhost(src.cells, 0xff4444, hintGroup, 0.6);
-                    log("🔴 빨강 -> 🟡 노랑 이동");
-                } else log("🟡 노랑 위치 착수");
-                drawGhost(move.cells, 0xf1c40f, hintGroup, 0.8);
-            } else log("AI: 둘 곳이 없어요.");
-        };
-
-        async function runAI() {
-            const move = await getAIMove();
-            if(move) {
-                if(move.type==='place') logic.confirmMove(move.cells, move.shapeIdx);
-                else {
-                    const b = logic.blocks.find(x=>x.id===move.fromId);
-                    if(b) {
-                        logic.selectedBlockOriginalCells = JSON.parse(JSON.stringify(b.cells));
-                        logic.removeBlock(b.id); logic.selectedBlock = b;
-                        logic.confirmMove(move.cells, move.shapeIdx);
-                    }
-                }
-                log("AI 착수함"); renderBoard(); updateUI(); updateGhost();
-            }
-        }
-
-        window.toggleAIMode = () => {
-            logic.aiMode = !logic.aiMode; updateUI();
-            if(!isOnline && logic.aiMode && logic.currentPlayer===2) runAI();
-        };
-        window.undo = () => { if(!isOnline && logic.undo()) { log("무르기"); hoveredBlockId=null; renderBoard(); updateUI(); } };
-        window.resetGame = () => { if(!isOnline && confirm("초기화?")) { logic.reset(); renderBoard(); updateUI(); } };
+        
+        document.getElementById('btn-rotate').addEventListener('click', e=>{ e.stopPropagation(); currentShapeIdx++; updateGhost(); });
         window.addEventListener('resize', () => { camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+        
         function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
         renderBoard(); updateUI(); animate();
     </script>
