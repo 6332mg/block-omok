@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>대학전쟁: 블록 오목 (MCTS Final Fix)</title>
+    <title>대학전쟁: 블록 오목 (Online Multi)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; background: #dfe4ea; font-family: 'Pretendard', sans-serif; user-select: none; -webkit-touch-callout: none; }
@@ -20,8 +20,6 @@
         .btn { background: #fff; border: 1px solid #ccc; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: bold; box-shadow: 0 2px 3px rgba(0,0,0,0.05); transition: all 0.2s; }
         .btn:active { transform: translateY(1px); }
         .btn-hint { background: #f1c40f; border-color: #f39c12; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.2); }
-        .btn-ai-toggle { background: #ecf0f1; color: #7f8c8d; }
-        .btn-ai-toggle.active { background: #2ecc71; color: white; border-color: #27ae60; }
         .phase-badge { font-size: 0.7rem; color: white; padding: 3px 6px; border-radius: 4px; background: #333; vertical-align: middle; }
         
         .fab-rotate { pointer-events: auto; position: absolute; right: 20px; bottom: 30px; width: 70px; height: 70px; background: #fff; color: #333; border-radius: 50%; border: 2px solid #ddd; display: flex; justify-content: center; align-items: center; font-size: 2rem; cursor: pointer; box-shadow: 0 6px 15px rgba(0,0,0,0.2); transition: transform 0.1s; }
@@ -30,15 +28,24 @@
         
         .log-panel { pointer-events: none; position: absolute; left: 20px; bottom: 85px; background: rgba(0,0,0,0.6); color: #fff; width: 250px; height: 120px; border-radius: 8px; padding: 10px; overflow: hidden; font-family: monospace; font-size: 0.8rem; display: flex; flex-direction: column-reverse; text-shadow: 1px 1px 2px black; }
         
-        .modal-overlay { pointer-events: auto; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 100; }
-        .modal-content { background: white; width: 85%; max-width: 500px; max-height: 85%; border-radius: 12px; padding: 25px; overflow-y: auto; position: relative; }
-        .close-btn { position: absolute; top: 15px; right: 20px; font-size: 1.5rem; cursor: pointer; color: #888; }
-        h3 { margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        .rule-sec { margin-bottom: 15px; }
-        .rule-head { font-weight: bold; color: #2c3e50; margin-bottom: 5px; }
-        .rule-desc { font-size: 0.9rem; color: #555; line-height: 1.5; }
+        /* 로비 화면 */
+        #lobby-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.95); z-index: 200;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            pointer-events: auto;
+        }
+        .lobby-box { text-align: center; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 80%; max-width: 400px; }
+        .lobby-title { font-size: 2rem; font-weight: bold; margin-bottom: 20px; color: #2c3e50; }
+        .lobby-btn { width: 100%; padding: 15px; margin: 10px 0; font-size: 1.1rem; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; color: white; transition: transform 0.1s; }
+        .btn-create { background: #3498db; }
+        .btn-join { background: #2ecc71; }
+        .lobby-input { width: 100%; padding: 12px; margin: 10px 0; font-size: 1.1rem; border: 2px solid #ddd; border-radius: 10px; box-sizing: border-box; text-align: center; }
         
         #ai-loader { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); color: white; padding: 15px 25px; border-radius: 30px; font-weight: bold; z-index: 50; pointer-events: none; }
+        
+        /* 내 플레이어 표시 */
+        #my-player-badge { font-size: 0.9rem; font-weight: bold; padding: 5px 10px; border-radius: 15px; margin-top: 5px; display: inline-block; }
     </style>
 
     <script type="importmap">
@@ -47,11 +54,27 @@
 </head>
 <body>
 
+    <div id="lobby-overlay">
+        <div class="lobby-box">
+            <div class="lobby-title">🎲 블록 오목 온라인</div>
+            <div id="lobby-main">
+                <button class="lobby-btn btn-create" onclick="createRoom()">방 만들기 (Host)</button>
+                <div style="margin: 15px 0; color: #888;">- 또는 -</div>
+                <input type="text" id="room-code-input" class="lobby-input" placeholder="참여 코드 4자리" maxlength="4">
+                <button class="lobby-btn btn-join" onclick="joinRoom()">방 참가하기 (Join)</button>
+            </div>
+            <div id="lobby-wait" style="display:none;">
+                <div style="font-size:1.2rem; margin-bottom:15px;">방 코드: <span id="display-room-code" style="color:#e74c3c; font-weight:bold; font-size:1.8rem;"></span></div>
+                <div>친구에게 코드를 알려주세요.</div>
+                <div style="margin-top:20px;">접속 대기 중...</div>
+            </div>
+        </div>
+    </div>
+
     <div id="game-canvas"></div>
     <div id="ai-loader">🤖 AI 수읽기 중...</div>
 
-    <div id="ui-layer">
-        <div class="top-bar">
+    <div id="ui-layer" style="display:none;"> <div class="top-bar">
             <div class="row-upper">
                 <div class="game-info">
                     <div class="title-row">
@@ -66,24 +89,16 @@
                     </div>
                 </div>
                 <div class="btn-group">
-                    <button class="btn" onclick="window.undo()">↩️</button>
-                    <button class="btn" onclick="window.resetGame()">🔄</button>
-                </div>
+                    </div>
             </div>
             <div class="row-lower">
-                <div style="font-size:0.8rem; color:#555;">
-                    <button id="btn-ai-toggle" class="btn btn-ai-toggle" onclick="window.toggleAIMode()">🤖 AI 대전: OFF</button>
-                </div>
+                <div id="my-player-badge">관전자 모드</div>
                 <button class="btn btn-hint" onclick="window.askAI()">💡 힌트</button>
             </div>
         </div>
-
-        <div class="log-panel" id="log-console">
-            <div>🚀 게임 시작!</div>
-        </div>
-
-        <div class="fab-rules" onclick="document.getElementById('rule-modal').style.display='flex'">?</div>
+        <div class="log-panel" id="log-console"><div>🚀 접속 완료!</div></div>
         <div class="fab-rotate" id="btn-rotate">↻</div>
+        <div class="fab-rules" onclick="document.getElementById('rule-modal').style.display='flex'">?</div>
     </div>
 
     <div id="rule-modal" class="modal-overlay" onclick="if(event.target===this) this.style.display='none'">
@@ -97,11 +112,124 @@
     </div>
 
     <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue, update, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-        // 전역 설정
+        // =========================================================
+        // 🔥 사용자의 Firebase 설정 (databaseURL 자동 추가됨) 🔥
+        // =========================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyC6I8D1aazjTGBJdwQ1iHsQYyHXWHf3_PU",
+            authDomain: "omok-game-95008.firebaseapp.com",
+            // 중요: databaseURL이 없으면 멀티플레이가 안됩니다.
+            databaseURL: "https://omok-game-95008-default-rtdb.firebaseio.com",
+            projectId: "omok-game-95008",
+            storageBucket: "omok-game-95008.firebasestorage.app",
+            messagingSenderId: "34601684939",
+            appId: "1:34601684939:web:4ed1cc9a0c653d9783b04e",
+            measurementId: "G-XHNPPYPNQT"
+        };
+        // =========================================================
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        let myRoomId = null;
+        let myPlayerNum = 0; // 1: 흑(Host), 2: 백(Guest)
+        let isOnline = false;
+
+        // --- Network Logic ---
+        
+        window.createRoom = () => {
+            const code = Math.floor(1000 + Math.random() * 9000).toString();
+            myRoomId = code;
+            myPlayerNum = 1; // 방장은 무조건 흑
+            
+            // 초기 방 상태 생성
+            set(ref(db, 'rooms/' + code), {
+                status: 'waiting',
+                board: logic.serialize(),
+                lastMove: null
+            });
+
+            document.getElementById('lobby-main').style.display = 'none';
+            document.getElementById('lobby-wait').style.display = 'block';
+            document.getElementById('display-room-code').innerText = code;
+
+            // 상대방 입장 대기
+            onValue(ref(db, 'rooms/' + code + '/status'), (snapshot) => {
+                const status = snapshot.val();
+                if (status === 'playing') {
+                    startGame(myPlayerNum);
+                }
+            });
+        };
+
+        window.joinRoom = () => {
+            const code = document.getElementById('room-code-input').value;
+            if (code.length !== 4) return alert("4자리 코드를 입력하세요.");
+
+            get(child(ref(db), 'rooms/' + code)).then((snapshot) => {
+                if (snapshot.exists()) {
+                    myRoomId = code;
+                    myPlayerNum = 2; // 참가자는 무조건 백
+                    
+                    // 상태 변경 -> 게임 시작 트리거
+                    update(ref(db, 'rooms/' + code), { status: 'playing' });
+                    startGame(myPlayerNum);
+                } else {
+                    alert("방을 찾을 수 없습니다.");
+                }
+            }).catch((error) => {
+                console.error(error);
+                alert("접속 오류");
+            });
+        };
+
+        function startGame(playerNum) {
+            document.getElementById('lobby-overlay').style.display = 'none';
+            document.getElementById('ui-layer').style.display = 'flex';
+            isOnline = true;
+            
+            const badge = document.getElementById('my-player-badge');
+            if (playerNum === 1) {
+                badge.innerText = "나: 흑색 (Player 1)";
+                badge.style.background = "#e74c3c"; badge.style.color = "white";
+            } else {
+                badge.innerText = "나: 백색 (Player 2)";
+                badge.style.background = "#2ecc71"; badge.style.color = "white";
+            }
+
+            // 데이터 동기화 리스너 연결
+            onValue(ref(db, 'rooms/' + myRoomId + '/board'), (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    // 서버 데이터로 내 보드 업데이트
+                    logic.deserialize(data);
+                    
+                    // UI & Visual 갱신
+                    renderBoard();
+                    updateUI();
+                    
+                    if (logic.winner !== 0) {
+                        setTimeout(() => alert(logic.winner === myPlayerNum ? "승리했습니다!" : "패배했습니다..."), 100);
+                    }
+                }
+            });
+        }
+
+        function sendMoveToServer() {
+            if (!isOnline) return;
+            // 내 턴에 움직임을 완료하면 서버에 전체 상태를 덮어씀
+            set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize());
+        }
+
+        // ==========================================
+        // Game Logic & Visuals (Synced)
+        // ==========================================
         const SHAPES = [
             [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:1,z:0}], [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:-1,z:0}],
             [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:-1,z:0}], [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:1,z:0}],
@@ -109,61 +237,51 @@
             [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:0,y:1,z:1}], [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:0,y:-1,z:1}]
         ];
 
-        // ==========================================
-        // 1. Game Logic (The Engine)
-        // ==========================================
         class GameLogic {
             constructor() { this.reset(); }
 
             reset() {
                 this.board = Array.from({length: 5}, () => Array.from({length: 5}, () => Array(5).fill(0)));
                 this.blocks = []; 
-                this.history = []; 
+                this.history = []; // 멀티에선 무르기 비활성
                 this.turnCount = 0;
                 this.currentPlayer = 1; 
                 this.blocksLeft = { 1: 4, 2: 4 };
                 this.phase = 'PLACEMENT'; 
                 this.winner = 0;
                 this.initFixedBlocks();
-                this.aiMode = false; 
             }
 
-            // [핵심] MCTS용 딥 카피 메서드 (Shadow Board 생성용)
-            clone() {
-                const newLogic = new GameLogic();
-                newLogic.board = JSON.parse(JSON.stringify(this.board));
-                newLogic.blocks = JSON.parse(JSON.stringify(this.blocks));
-                newLogic.turnCount = this.turnCount;
-                newLogic.currentPlayer = this.currentPlayer;
-                newLogic.blocksLeft = {...this.blocksLeft};
-                newLogic.phase = this.phase;
-                newLogic.winner = this.winner;
-                newLogic.aiMode = this.aiMode;
-                return newLogic;
-            }
-
-            saveState() {
-                const state = {
-                    board: JSON.parse(JSON.stringify(this.board)),
-                    blocks: JSON.parse(JSON.stringify(this.blocks)),
+            serialize() {
+                return {
+                    board: this.board,
+                    blocks: this.blocks,
                     turnCount: this.turnCount,
                     currentPlayer: this.currentPlayer,
-                    blocksLeft: {...this.blocksLeft},
+                    blocksLeft: this.blocksLeft,
                     phase: this.phase,
                     winner: this.winner
                 };
-                this.history.push(state);
             }
 
-            undo() {
-                if (this.history.length === 0) return false;
-                const state = this.history.pop();
-                Object.assign(this, state);
-                return true;
+            deserialize(data) {
+                this.board = data.board;
+                this.blocks = data.blocks || [];
+                this.turnCount = data.turnCount;
+                this.currentPlayer = data.currentPlayer;
+                this.blocksLeft = data.blocksLeft;
+                this.phase = data.phase;
+                this.winner = data.winner;
+            }
+            
+            clone() {
+                const newLogic = new GameLogic();
+                newLogic.deserialize(JSON.parse(JSON.stringify(this.serialize())));
+                return newLogic;
             }
 
             initFixedBlocks() {
-                this.blocks = []; // reset 호출시 중복 방지
+                this.blocks = []; 
                 this.board = Array.from({length: 5}, () => Array.from({length: 5}, () => Array(5).fill(0)));
                 this.addBlock(1, [{x:1, y:3, z:0}, {x:2, y:3, z:0}, {x:1, y:2, z:0}], 0, true);
                 this.addBlock(2, [{x:2, y:1, z:0}, {x:3, y:1, z:0}, {x:3, y:2, z:0}], 0, true);
@@ -207,7 +325,6 @@
                 if (!block) return { ok: false, msg: "내 블록이 아닙니다." };
                 if (!this.canPick(block)) return { ok: false, msg: "위에 블록이 있어 이동 불가." };
                 
-                this.saveState();
                 this.selectedBlockOriginalCells = JSON.parse(JSON.stringify(block.cells));
                 this.removeBlock(block.id);
                 this.selectedBlock = block;
@@ -255,7 +372,6 @@
 
             confirmMove(cells, shapeIdx) {
                 if (this.phase === 'PLACEMENT') {
-                    this.saveState();
                     this.addBlock(this.currentPlayer, cells, shapeIdx);
                     this.blocksLeft[this.currentPlayer]--;
                 } else {
@@ -271,9 +387,10 @@
                     
                     if (this.blocksLeft[1] === 0 && this.blocksLeft[2] === 0) this.phase = 'MOVEMENT';
                     else if (this.blocksLeft[this.currentPlayer] === 0 && this.phase === 'PLACEMENT') this.phase = 'MOVEMENT';
-
-                    if (this.aiMode && this.currentPlayer === 2) triggerAI();
                 }
+                
+                // 멀티플레이: 변경사항 전송
+                sendMoveToServer();
                 return this.winner;
             }
 
@@ -306,13 +423,11 @@
         }
 
         // ==========================================
-        // 2. MCTS AI Engine (Fixed for Bug)
+        // MCTS AI (Hint Only)
         // ==========================================
         class MCTSEngine {
-            // Shadow Logic을 사용하여 실제 보드를 건드리지 않고 계산
             getLegalMoves(gameLogic, player) {
                 const moves = [];
-                // 1. Placement
                 if (gameLogic.blocksLeft[player] > 0) {
                     for (let x=0; x<5; x++) {
                         for (let y=0; y<5; y++) {
@@ -324,73 +439,49 @@
                             }
                         }
                     }
-                } 
-                // 2. Movement (여기가 중요)
-                else {
+                } else {
                     const myBlocks = gameLogic.blocks.filter(b => b.player === player && !b.isFixed);
                     for (let block of myBlocks) {
                         if (!gameLogic.canPick(block)) continue;
-                        
-                        // 시뮬레이션: 잠시 블록 제거 (Shadow Board에서만!)
                         const originalCells = JSON.parse(JSON.stringify(block.cells));
                         gameLogic.removeBlock(block.id); 
-
                         for (let x=0; x<5; x++) {
                             for (let y=0; y<5; y++) {
                                 for (let s=0; s<8; s++) {
                                     const shape = SHAPES[s];
                                     const cells = shape.map(d => ({x: x+d.x, y: y+d.y, z: d.z}));
                                     const check = gameLogic.checkValidity(player, cells, true, true, originalCells);
-                                    if (check.ok) {
-                                        // fromId가 중요: 실제 게임판의 블록 ID를 추적해야 함
-                                        moves.push({ type: 'move', fromId: block.id, cells, shapeIdx: s, originalCells });
-                                    }
+                                    if (check.ok) moves.push({ type: 'move', fromId: block.id, cells, shapeIdx: s, originalCells });
                                 }
                             }
                         }
-                        // 블록 복구 (Shadow Board에서만!)
                         gameLogic.addBlock(player, originalCells, block.shapeIdx);
-                        // 복구된 블록은 ID가 바뀌었을 수 있지만 시뮬레이션 내에선 상관없음
-                        // (하지만 다음 루프를 위해 상태를 잘 관리해야 함. Clone 방식이라 안전)
                     }
                 }
                 return moves;
             }
 
             getBestMove(realLogic) {
-                // [버그 수정의 핵심] 실제 로직을 건드리지 않고 Clone 생성
                 const logic = realLogic.clone(); 
                 const player = logic.currentPlayer;
                 const legalMoves = this.getLegalMoves(logic, player);
-                
                 if (legalMoves.length === 0) return null;
 
-                // 필승수 체크 (1턴 킬)
                 for (let move of legalMoves) {
-                    const nextState = logic.clone(); // 또 복제해서 안전하게 테스트
+                    const nextState = logic.clone();
                     this.applyMove(nextState, move, player);
                     if (nextState.checkWin() === player) return move;
                 }
 
-                // 점수 계산 (간단한 Monte Carlo)
                 let bestMove = null;
                 let maxScore = -Infinity;
-                
-                // 후보군 랜덤 셔플 후 상위 25개만 검사 (속도 최적화)
                 const candidates = legalMoves.sort(() => 0.5 - Math.random()).slice(0, 25);
 
                 for (let move of candidates) {
-                    const nextState = logic.clone(); // 시뮬레이션용 판 생성
+                    const nextState = logic.clone();
                     this.applyMove(nextState, move, player);
-                    
-                    // 상대방 입장 평가 (Minimax 개념 약식 적용)
-                    // 내가 둔 후, 상대방이 둘 곳이 없거나, 상대가 이기기 힘들면 높은 점수
                     const score = this.evaluateState(nextState, player);
-                    
-                    if (score > maxScore) {
-                        maxScore = score;
-                        bestMove = move;
-                    }
+                    if (score > maxScore) { maxScore = score; bestMove = move; }
                 }
                 return bestMove || legalMoves[0];
             }
@@ -400,15 +491,11 @@
                     logic.addBlock(player, move.cells, move.shapeIdx);
                     logic.blocksLeft[player]--;
                 } else {
-                    // ID로 찾아서 제거 (Shadow Board라 ID 불일치 가능성 있음. 좌표로 찾는게 안전하나 Clone이라 괜찮음)
-                    // 하지만 Clone시 ID가 유지되므로 ID로 찾기 시도
                     let block = logic.blocks.find(b => b.id === move.fromId);
-                    // 만약 ID가 틀어졌다면(addBlock으로 복구시 ID 변경됨), 좌표로 유사 검색
                     if (!block && move.originalCells) {
                         const oc = move.originalCells[0];
                         block = logic.blocks.find(b => b.player === player && b.cells[0].x === oc.x && b.cells[0].y === oc.y);
                     }
-
                     if (block) {
                         logic.removeBlock(block.id);
                         logic.addBlock(player, move.cells, move.shapeIdx);
@@ -418,16 +505,11 @@
 
             evaluateState(logic, me) {
                 const opponent = me===1 ? 2:1;
-                // 승리했으면 최고점
                 if (logic.checkWin() === me) return 1000;
-                // 상대가 이기는 상태면 최하점
                 if (logic.checkWin() === opponent) return -1000;
-
-                // 중앙 점유 + 높이 점유 점수
                 let score = 0;
                 for(let b of logic.blocks) {
                     if (b.player === me) {
-                        // 중앙(2,2)에 가까울수록, 높을수록 가점
                         b.cells.forEach(c => {
                             if (c.x===2 && c.y===2) score += 3;
                             else if (c.x>=1 && c.x<=3 && c.y>=1 && c.y<=3) score += 1;
@@ -435,13 +517,12 @@
                         });
                     }
                 }
-                return score + Math.random(); // 약간의 랜덤성
+                return score + Math.random();
             }
         }
 
-
         // ==========================================
-        // 3. View & Interaction
+        // Main Setup
         // ==========================================
         const logic = new GameLogic();
         const mcts = new MCTSEngine();
@@ -480,7 +561,7 @@
         hitPlane.rotation.x = -Math.PI/2; hitPlane.position.y = 0.5; scene.add(hitPlane);
 
         scene.add(new THREE.GridHelper(5,5, 0xbdc3c7, 0xecf0f1));
-        const basePlate = new THREE.Mesh(new THREE.BoxGeometry(5, 0.1, 5), new THREE.MeshStandardMaterial({color: 0xffffff}));
+        const basePlate = new THREE.Mesh(new THREE.BoxGeometry(5, 0.1, 5), new THREE.MeshStandardMaterial({color: 0xdeb887}));
         basePlate.position.y = -0.05; basePlate.receiveShadow = true; scene.add(basePlate);
 
         let currentShapeIdx = 0;
@@ -498,15 +579,6 @@
             const badge = document.getElementById('game-phase');
             badge.innerText = logic.phase==='MOVEMENT'?"이동":"착수";
             badge.style.background = logic.phase==='MOVEMENT'?"#e67e22":"#333";
-
-            const toggleBtn = document.getElementById('btn-ai-toggle');
-            if (logic.aiMode) {
-                toggleBtn.innerText = "🤖 AI 대전: ON";
-                toggleBtn.classList.add('active');
-            } else {
-                toggleBtn.innerText = "🤖 AI 대전: OFF";
-                toggleBtn.classList.remove('active');
-            }
         }
 
         function renderBoard() {
@@ -520,7 +592,6 @@
                 const mat = new THREE.MeshStandardMaterial({ color: colorVal, roughness: 0.3, emissive: isHovered?0x333333:0x000000 });
                 const grp = new THREE.Group();
                 grp.userData = { id: block.id, isBlock: true };
-
                 block.cells.forEach(c => {
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(c.x-2, c.z+0.5, c.y-2);
@@ -551,6 +622,8 @@
         function updateGhost() {
             while(ghostGroup.children.length > 0) ghostGroup.remove(ghostGroup.children[0]);
             if(logic.winner !== 0) return;
+            if (isOnline && logic.currentPlayer !== myPlayerNum) return;
+
             if(logic.phase === 'MOVEMENT' && !logic.selectedBlock) return; 
             if(hoverX === -1) return;
 
@@ -572,7 +645,6 @@
             });
         }
 
-        // --- Interaction ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         let downTime = 0;
@@ -581,6 +653,8 @@
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
+
+            if (isOnline && logic.currentPlayer !== myPlayerNum) return;
 
             if (logic.phase === 'MOVEMENT' && !logic.selectedBlock) {
                 const intersectsBlock = raycaster.intersectObjects(boardGroup.children, true);
@@ -608,6 +682,11 @@
 
         function handleClick() {
             if (logic.winner !== 0) return;
+            if (isOnline && logic.currentPlayer !== myPlayerNum) {
+                log("상대방 턴입니다.");
+                return;
+            }
+
             while(hintGroup.children.length > 0) hintGroup.remove(hintGroup.children[0]);
 
             if (logic.phase === 'MOVEMENT' && !logic.selectedBlock) {
@@ -634,88 +713,35 @@
                 if (check.ok) {
                     const win = logic.confirmMove(cells, currentShapeIdx);
                     log(`착수 완료`);
-                    if (win !== 0) setTimeout(() => alert(`Player ${win} 승리!`), 100);
                     updateUI(); renderBoard(); updateGhost();
                 } else { log(`🚫 ${check.msg}`); }
             }
         }
 
-        window.toggleAIMode = () => {
-            logic.aiMode = !logic.aiMode;
-            updateUI();
-            log(`AI 모드: ${logic.aiMode ? "ON" : "OFF"}`);
-            if (logic.aiMode && logic.currentPlayer === 2) triggerAI();
-        };
-
         window.askAI = () => {
             if (logic.winner !== 0) return;
             log("AI가 훈수 두는 중...");
             aiLoader.style.display = 'block';
-            
             setTimeout(() => {
                 const bestMove = mcts.getBestMove(logic);
                 aiLoader.style.display = 'none';
-                
                 if (bestMove) {
-                    log("💡 AI 추천 위치 표시됨 (노란색)");
                     while(hintGroup.children.length > 0) hintGroup.remove(hintGroup.children[0]);
-                    drawGhostBlock(bestMove.cells, 0xf1c40f, hintGroup, 0.8);
-                    if (bestMove.type === 'move') log("⚠️ (이동 훈수) 현재 블록을 들어서 저기로 옮기세요.");
-                } else {
-                    log("둘 수 있는 곳이 없습니다.");
-                }
+                    if (bestMove.type === 'move') {
+                        const srcBlock = logic.blocks.find(b => b.id === bestMove.fromId);
+                        if (srcBlock) drawGhostBlock(srcBlock.cells, 0xff4444, hintGroup, 0.6);
+                        drawGhostBlock(bestMove.cells, 0xf1c40f, hintGroup, 0.8);
+                        log("⚠️ [힌트] 빨간 블록을 -> 노란 위치로 옮기세요.");
+                    } else {
+                        drawGhostBlock(bestMove.cells, 0xf1c40f, hintGroup, 0.8);
+                        log("💡 [힌트] 노란 위치에 두세요.");
+                    }
+                } else { log("둘 수 있는 곳이 없습니다."); }
             }, 100);
         };
 
-        function triggerAI() {
-            if (logic.winner !== 0) return;
-            aiLoader.style.display = 'block';
-            
-            setTimeout(() => {
-                const bestMove = mcts.getBestMove(logic);
-                aiLoader.style.display = 'none';
-
-                if (bestMove) {
-                    if (bestMove.type === 'place') {
-                        logic.confirmMove(bestMove.cells, bestMove.shapeIdx);
-                    } else {
-                        // [버그 수정 적용] Movement Phase
-                        // 실제 블록을 ID로 안전하게 찾아서 처리
-                        const block = logic.blocks.find(b => b.id === bestMove.fromId);
-                        if (block) {
-                            // 1. Pick
-                            logic.saveState();
-                            logic.selectedBlockOriginalCells = JSON.parse(JSON.stringify(block.cells));
-                            logic.removeBlock(block.id);
-                            logic.selectedBlock = block; 
-                            
-                            // 2. Place
-                            logic.confirmMove(bestMove.cells, bestMove.shapeIdx);
-                        } else {
-                            console.error("AI가 이동할 블록을 찾지 못함");
-                        }
-                    }
-                    log("🤖 AI 착수 완료");
-                    if (logic.winner !== 0) setTimeout(() => alert(`Player ${logic.winner} 승리!`), 100);
-                    updateUI(); renderBoard(); updateGhost();
-                } else {
-                    log("AI 기권 (둘 곳 없음)");
-                }
-            }, 500);
-        }
-
-        window.undo = () => { 
-            if(logic.undo()) { 
-                log("무르기 완료"); 
-                hoveredBlockId=null; 
-                while(hintGroup.children.length > 0) hintGroup.remove(hintGroup.children[0]);
-                renderBoard(); updateUI(); updateGhost(); 
-            } 
-        };
-        window.resetGame = () => { if(confirm("초기화?")) { logic.reset(); hoveredBlockId=null; while(hintGroup.children.length > 0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); log("초기화됨"); } };
         window.addEventListener('keydown', (e) => { 
             if(e.code==='KeyR') { currentShapeIdx++; updateGhost(); } 
-            if(e.code==='KeyZ') window.undo(); 
         });
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
 
