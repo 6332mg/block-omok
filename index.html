@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>대학전쟁: 블록 오목 (Ultimate Edition)</title>
+    <title>대학전쟁: 블록 오목 (Legendary AI Ver.)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; background: #dfe4ea; font-family: 'Pretendard', sans-serif; user-select: none; -webkit-touch-callout: none; }
@@ -40,13 +40,12 @@
         .lobby-box { text-align: center; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 85%; max-width: 400px; }
         .lobby-title { font-size: 2rem; font-weight: bold; margin-bottom: 20px; color: #2c3e50; }
         .lobby-btn { width: 100%; padding: 15px; margin: 8px 0; font-size: 1.1rem; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; color: white; transition: transform 0.1s; }
-        .btn-single { background: #9b59b6; } /* 보라색 */
+        .btn-single { background: #9b59b6; }
         .btn-create { background: #3498db; }
         .btn-join { background: #2ecc71; }
         .lobby-input { width: 100%; padding: 12px; margin: 10px 0; font-size: 1.1rem; border: 2px solid #ddd; border-radius: 10px; box-sizing: border-box; text-align: center; }
         
         #ai-loader { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); color: white; padding: 15px 25px; border-radius: 30px; font-weight: bold; z-index: 50; pointer-events: none; }
-        
         #my-player-badge { font-size: 0.9rem; font-weight: bold; padding: 5px 10px; border-radius: 15px; margin-top: 5px; display: inline-block; }
     </style>
 
@@ -58,9 +57,9 @@
 
     <div id="lobby-overlay">
         <div class="lobby-box">
-            <div class="lobby-title">🎲 블록 오목</div>
+            <div class="lobby-title">🎲 블록 오목 (Legendary)</div>
             <div id="lobby-main">
-                <button class="lobby-btn btn-single" onclick="startSingleGame()">👤 혼자 하기 / AI 연습</button>
+                <button class="lobby-btn btn-single" onclick="startSingleGame()">👤 싱글 / AI 연습</button>
                 <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
                 <div style="font-size:0.9rem; color:#666; margin-bottom:10px;">온라인 멀티플레이</div>
                 <button class="lobby-btn btn-create" onclick="createRoom()">방 만들기 (Host)</button>
@@ -78,7 +77,7 @@
     </div>
 
     <div id="game-canvas"></div>
-    <div id="ai-loader">🤖 AI 수읽기 중...</div>
+    <div id="ai-loader">🤖 AI 뇌 가동중...</div>
 
     <div id="ui-layer" style="display:none;">
         <div class="top-bar">
@@ -129,18 +128,16 @@
         import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
         // =========================================================
-        // 🔥 사용자 설정 적용 완료 (수정 불필요) 🔥
+        // 🔥 아까 찾은 Firebase 설정 코드를 여기에 다시 붙여넣으세요 🔥
         // =========================================================
         const firebaseConfig = {
-            apiKey: "AIzaSyC6I8D1aazjTGBJdwQ1iHsQYyHXWHf3_PU",
-            authDomain: "omok-game-95008.firebaseapp.com",
-            // [자동 보정됨] 표준 RTDB 주소
-            databaseURL: "https://omok-game-95008-default-rtdb.firebaseio.com", 
-            projectId: "omok-game-95008",
-            storageBucket: "omok-game-95008.firebasestorage.app",
-            messagingSenderId: "34601684939",
-            appId: "1:34601684939:web:4ed1cc9a0c653d9783b04e",
-            measurementId: "G-XHNPPYPNQT"
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:abcdef"
         };
         // =========================================================
 
@@ -148,105 +145,139 @@
         const db = getDatabase(app);
 
         let myRoomId = null;
-        let myPlayerNum = 0; // 1:흑, 2:백 (싱글모드에선 의미 없음)
+        let myPlayerNum = 0; 
         let isOnline = false;
 
-        // --- Lobby & Network Logic ---
-        
+        // --- Neural Network AI Class (Deep Learning) ---
+        class NeuralAI {
+            constructor() {
+                this.weights = null;
+                this.ready = false;
+            }
+
+            async load() {
+                try {
+                    const res = await fetch('./legendary_ai.json');
+                    this.weights = await res.json();
+                    this.ready = true;
+                    console.log("🧠 전설적인 AI 두뇌 로드 완료 (512x512)");
+                } catch (e) {
+                    console.error("AI 파일 로드 실패. (Live Server 필요)", e);
+                }
+            }
+
+            predict(board) {
+                if (!this.ready) return null;
+
+                // 1. Flatten Input
+                let input = [];
+                for (let z=0; z<5; z++) {
+                    for (let y=0; y<5; y++) {
+                        for (let x=0; x<5; x++) {
+                            input.push(board[z][y][x]);
+                        }
+                    }
+                }
+
+                // 2. Neural Network Forward Pass (ReLU Activation)
+                // Layer 1 (Input -> 512)
+                let h1 = this.matMul(input, this.weights.fc0_w, this.weights.fc0_b);
+                h1 = h1.map(x => Math.max(0, x)); // ReLU
+
+                // Layer 2 (512 -> 512)
+                let h2 = this.matMul(h1, this.weights.fc1_w, this.weights.fc1_b);
+                h2 = h2.map(x => Math.max(0, x)); // ReLU
+
+                // Output Layer (512 -> 200 Actions)
+                let output = this.matMul(h2, this.weights.fc2_w, this.weights.fc2_b);
+                
+                return output; 
+            }
+
+            matMul(input, weightMatrix, biasVector) {
+                const outputSize = biasVector.length;
+                const inputSize = input.length;
+                let result = new Array(outputSize).fill(0);
+                // Simple Matrix Multiplication
+                for (let i = 0; i < outputSize; i++) {
+                    let sum = 0;
+                    for (let j = 0; j < inputSize; j++) {
+                        sum += input[j] * weightMatrix[i][j];
+                    }
+                    result[i] = sum + biasVector[i];
+                }
+                return result;
+            }
+        }
+
+        // --- Helper to decode AI Action ID ---
+        function decodeAction(actionId) {
+            const shapeIdx = actionId % 8;
+            const posIdx = Math.floor(actionId / 8);
+            const y = Math.floor(posIdx / 5);
+            const x = posIdx % 5;
+            return { x, y, shapeIdx };
+        }
+
+        // --- Lobby & Network ---
         window.startSingleGame = () => {
             isOnline = false;
-            myPlayerNum = 1; // 기본 1p지만 제한은 없음
+            myPlayerNum = 1; 
             document.getElementById('lobby-overlay').style.display = 'none';
             document.getElementById('ui-layer').style.display = 'flex';
-            
-            // 싱글모드 UI 세팅
-            const badge = document.getElementById('my-player-badge');
-            badge.innerText = "👤 싱글 모드 (자유 연습)";
-            badge.style.background = "#9b59b6"; badge.style.color = "white";
-            
-            // AI 버튼 보이기
+            document.getElementById('my-player-badge').innerText = "👤 싱글 모드";
+            document.getElementById('my-player-badge').style.background = "#9b59b6";
             document.getElementById('btn-ai-toggle').style.display = 'inline-block';
         };
 
         window.createRoom = () => {
             const code = Math.floor(1000 + Math.random() * 9000).toString();
             myRoomId = code;
-            myPlayerNum = 1; // 방장은 무조건 흑
-            
-            set(ref(db, 'rooms/' + code), {
-                status: 'waiting',
-                board: logic.serialize(),
-                lastMove: null
-            });
-
+            myPlayerNum = 1; 
+            set(ref(db, 'rooms/' + code), { status: 'waiting', board: logic.serialize() });
             document.getElementById('lobby-main').style.display = 'none';
             document.getElementById('lobby-wait').style.display = 'block';
             document.getElementById('display-room-code').innerText = code;
-
-            onValue(ref(db, 'rooms/' + code + '/status'), (snapshot) => {
-                const status = snapshot.val();
-                if (status === 'playing') startGameMulti(myPlayerNum);
+            onValue(ref(db, 'rooms/' + code + '/status'), (snap) => {
+                if (snap.val() === 'playing') startGameMulti(1);
             });
         };
 
         window.joinRoom = () => {
             const code = document.getElementById('room-code-input').value;
-            if (code.length !== 4) return alert("4자리 코드를 입력하세요.");
-
-            get(child(ref(db), 'rooms/' + code)).then((snapshot) => {
-                if (snapshot.exists()) {
+            get(child(ref(db), 'rooms/' + code)).then((snap) => {
+                if (snap.exists()) {
                     myRoomId = code;
-                    myPlayerNum = 2; // 참가자는 무조건 백
+                    myPlayerNum = 2; 
                     update(ref(db, 'rooms/' + code), { status: 'playing' });
-                    startGameMulti(myPlayerNum);
-                } else {
-                    alert("방을 찾을 수 없습니다.");
-                }
-            }).catch((error) => {
-                console.error(error);
-                alert("접속 오류 (URL 설정을 확인하세요)");
+                    startGameMulti(2);
+                } else alert("방 없음");
             });
         };
 
-        function startGameMulti(playerNum) {
+        function startGameMulti(pNum) {
             document.getElementById('lobby-overlay').style.display = 'none';
             document.getElementById('ui-layer').style.display = 'flex';
             isOnline = true;
-            
-            // AI 버튼 숨기기 (멀티에선 혼란 방지)
             document.getElementById('btn-ai-toggle').style.display = 'none';
-            // 힌트 버튼은 유지
-
             const badge = document.getElementById('my-player-badge');
-            if (playerNum === 1) {
-                badge.innerText = "🌐 나: 흑색 (Host)";
-                badge.style.background = "#e74c3c"; badge.style.color = "white";
-            } else {
-                badge.innerText = "🌐 나: 백색 (Guest)";
-                badge.style.background = "#2ecc71"; badge.style.color = "white";
-            }
-
-            onValue(ref(db, 'rooms/' + myRoomId + '/board'), (snapshot) => {
-                const data = snapshot.val();
-                if (data) {
-                    logic.deserialize(data);
-                    renderBoard();
-                    updateUI();
-                    if (logic.winner !== 0) {
-                        setTimeout(() => alert(logic.winner === myPlayerNum ? "승리했습니다!" : "패배했습니다..."), 100);
-                    }
+            badge.innerText = pNum===1 ? "🌐 Host (흑)" : "🌐 Guest (백)";
+            badge.style.background = pNum===1 ? "#e74c3c" : "#2ecc71";
+            
+            onValue(ref(db, 'rooms/' + myRoomId + '/board'), (snap) => {
+                if (snap.val()) {
+                    logic.deserialize(snap.val());
+                    renderBoard(); updateUI();
+                    if(logic.winner!==0) setTimeout(()=>alert("게임 종료"), 100);
                 }
             });
         }
 
-        function sendMoveToServer() {
-            if (!isOnline) return;
-            set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize());
+        function sendMove() {
+            if (isOnline) set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize());
         }
 
-        // ==========================================
-        // Game Logic 
-        // ==========================================
+        // --- Game Logic ---
         const SHAPES = [
             [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:1,z:0}], [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:-1,z:0}],
             [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:-1,z:0}], [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:1,z:0}],
@@ -256,61 +287,29 @@
 
         class GameLogic {
             constructor() { this.reset(); }
-
             reset() {
                 this.board = Array.from({length: 5}, () => Array.from({length: 5}, () => Array(5).fill(0)));
-                this.blocks = []; 
-                this.history = []; 
-                this.turnCount = 0;
-                this.currentPlayer = 1; 
-                this.blocksLeft = { 1: 4, 2: 4 };
-                this.phase = 'PLACEMENT'; 
-                this.winner = 0;
-                this.initFixedBlocks();
-                this.aiMode = false;
+                this.blocks = []; this.history = []; this.turnCount = 0; this.currentPlayer = 1;
+                this.blocksLeft = { 1: 4, 2: 4 }; this.phase = 'PLACEMENT'; this.winner = 0;
+                this.initFixedBlocks(); this.aiMode = false;
             }
-
             serialize() {
-                return {
-                    board: this.board,
-                    blocks: this.blocks,
-                    turnCount: this.turnCount,
-                    currentPlayer: this.currentPlayer,
-                    blocksLeft: this.blocksLeft,
-                    phase: this.phase,
-                    winner: this.winner
-                };
+                return { board: this.board, blocks: this.blocks, turnCount: this.turnCount, currentPlayer: this.currentPlayer, blocksLeft: this.blocksLeft, phase: this.phase, winner: this.winner };
             }
-
             deserialize(data) {
-                this.board = data.board;
-                this.blocks = data.blocks || [];
-                this.turnCount = data.turnCount;
-                this.currentPlayer = data.currentPlayer;
-                this.blocksLeft = data.blocksLeft;
-                this.phase = data.phase;
-                this.winner = data.winner;
+                Object.assign(this, data);
             }
-            
-            clone() {
-                const newLogic = new GameLogic();
-                newLogic.deserialize(JSON.parse(JSON.stringify(this.serialize())));
-                return newLogic;
-            }
-
             initFixedBlocks() {
                 this.blocks = []; 
                 this.board = Array.from({length: 5}, () => Array.from({length: 5}, () => Array(5).fill(0)));
                 this.addBlock(1, [{x:1, y:3, z:0}, {x:2, y:3, z:0}, {x:1, y:2, z:0}], 0, true);
                 this.addBlock(2, [{x:2, y:1, z:0}, {x:3, y:1, z:0}, {x:3, y:2, z:0}], 0, true);
             }
-
-            addBlock(player, cells, shapeIdx, isFixed = false) {
+            addBlock(player, cells, shapeIdx, isFixed=false) {
                 const blockId = Date.now() + Math.random();
                 this.blocks.push({ id: blockId, player, cells, shapeIdx, isFixed });
                 cells.forEach(c => this.board[c.z][c.y][c.x] = player);
             }
-
             removeBlock(blockId) {
                 const idx = this.blocks.findIndex(b => b.id === blockId);
                 if (idx > -1) {
@@ -321,73 +320,56 @@
                 }
                 return null;
             }
-
             canPick(block) {
                 if (block.isFixed) return false;
                 for (let c of block.cells) {
                     if (c.z >= 4) continue;
-                    const valAbove = this.board[c.z+1][c.y][c.x];
-                    if (valAbove !== 0) {
+                    if (this.board[c.z+1][c.y][c.x] !== 0) {
                         const isSelf = block.cells.some(sc => sc.x===c.x && sc.y===c.y && sc.z===c.z+1);
                         if (!isSelf) return false;
                     }
                 }
                 return true;
             }
-
             pickBlock(x, y, z) {
-                const block = this.blocks.find(b => 
-                    b.player === this.currentPlayer && !b.isFixed &&
-                    b.cells.some(c => c.x===x && c.y===y && c.z===z)
-                );
-                if (!block) return { ok: false, msg: "내 블록이 아닙니다." };
-                if (!this.canPick(block)) return { ok: false, msg: "위에 블록이 있어 이동 불가." };
-                
+                const block = this.blocks.find(b => b.player === this.currentPlayer && !b.isFixed && b.cells.some(c => c.x===x && c.y===y && c.z===z));
+                if (!block) return { ok: false, msg: "내 블록 아님" };
+                if (!this.canPick(block)) return { ok: false, msg: "위에 블록 있음" };
                 this.selectedBlockOriginalCells = JSON.parse(JSON.stringify(block.cells));
                 this.removeBlock(block.id);
                 this.selectedBlock = block;
                 return { ok: true, block: block };
             }
-
-            checkValidity(player, cells, isMovement = false, isSim = false, originalCells = null) {
-                if (!isSim && this.winner !== 0) return { ok: false, msg: "게임 종료됨" };
-                
+            checkValidity(player, cells, isMovement=false, originalCells=null) {
+                if (this.winner !== 0) return { ok: false };
                 const origin = originalCells || (isMovement && this.selectedBlockOriginalCells ? this.selectedBlockOriginalCells : null);
                 if (isMovement && origin) {
-                    const currentSet = new Set(cells.map(c => `${c.x},${c.y},${c.z}`));
-                    const originalSet = new Set(origin.map(c => `${c.x},${c.y},${c.z}`));
-                    if (currentSet.size === originalSet.size) {
-                        let same = true;
-                        for (let k of currentSet) { if (!originalSet.has(k)) { same = false; break; } }
-                        if (same) return { ok: false, msg: "제자리 불가" };
+                    const cSet = new Set(cells.map(c=>`${c.x},${c.y},${c.z}`));
+                    const oSet = new Set(origin.map(c=>`${c.x},${c.y},${c.z}`));
+                    if (cSet.size === oSet.size) {
+                        let same = true; 
+                        for(let k of cSet) if(!oSet.has(k)) { same=false; break; }
+                        if(same) return { ok:false, msg:"제자리 불가" };
                     }
                 }
-
                 for(let c of cells) {
                     if(c.x<0||c.x>4||c.y<0||c.y>4||c.z<0||c.z>4) return {ok:false, msg:"범위 초과"};
-                    if(this.board[c.z][c.y][c.x] !== 0) return {ok:false, msg:"이미 블록 있음"};
+                    if(this.board[c.z][c.y][c.x]!==0) return {ok:false, msg:"이미 있음"};
                 }
-
                 if (!isMovement && this.turnCount < 2) {
-                     const restricted = ["0,3", "0,4", "1,4", "3,0", "4,0", "4,1"];
-                     if (cells.some(c => c.z === 0 && restricted.includes(`${c.x},${c.y}`))) 
-                         return {ok:false, msg:"초반 금지 구역"};
+                    const restricted = ["0,3","0,4","1,4","3,0","4,0","4,1"];
+                    if(cells.some(c=>c.z===0 && restricted.includes(`${c.x},${c.y}`))) return {ok:false, msg:"금지 구역"};
                 }
-                
-                const groundContacts = cells.filter(c => c.z === 0).length;
-                if (groundContacts !== 3 && groundContacts !== 1) 
-                    return {ok:false, msg:"접지 규칙 위반 (1 or 3)"};
-
+                if ([1,3].indexOf(cells.filter(c=>c.z===0).length) === -1) return {ok:false, msg:"접지 위반"};
                 for(let c of cells) {
-                    if(c.z > 0) {
-                        const hasSupportBelow = this.board[c.z-1][c.y][c.x] !== 0;
-                        const isSelfSupport = cells.some(sc => sc.x===c.x && sc.y===c.y && sc.z===c.z-1);
-                        if (!hasSupportBelow && !isSelfSupport) return {ok:false, msg:"지지대 필요"};
+                    if(c.z>0) {
+                        const hasSup = this.board[c.z-1][c.y][c.x]!==0;
+                        const isSelf = cells.some(sc=>sc.x===c.x && sc.y===c.y && sc.z===c.z-1);
+                        if(!hasSup && !isSelf) return {ok:false, msg:"지지대 필요"};
                     }
                 }
-                return {ok:true, msg:"가능"};
+                return {ok:true};
             }
-
             confirmMove(cells, shapeIdx) {
                 if (this.phase === 'PLACEMENT') {
                     this.addBlock(this.currentPlayer, cells, shapeIdx);
@@ -395,160 +377,43 @@
                 } else {
                     this.addBlock(this.currentPlayer, cells, shapeIdx);
                     this.selectedBlock = null;
-                    this.selectedBlockOriginalCells = null;
                 }
                 this.winner = this.checkWin();
-                
                 if (this.winner === 0) {
                     this.turnCount++;
                     this.currentPlayer = this.currentPlayer===1 ? 2:1;
-                    
                     if (this.blocksLeft[1] === 0 && this.blocksLeft[2] === 0) this.phase = 'MOVEMENT';
                     else if (this.blocksLeft[this.currentPlayer] === 0 && this.phase === 'PLACEMENT') this.phase = 'MOVEMENT';
-
-                    // 싱글모드에서 AI 턴
-                    if (!isOnline && this.aiMode && this.currentPlayer === 2) {
-                        triggerAI();
-                    }
+                    
+                    if(!isOnline && this.aiMode && this.currentPlayer===2) runAI();
                 }
-                
-                // 멀티플레이: 변경사항 전송
-                sendMoveToServer();
+                sendMove();
                 return this.winner;
             }
-
             checkWin() {
                 const topMap = Array.from({length: 5}, () => Array(5).fill(0));
-                for(let y=0; y<5; y++) {
-                    for(let x=0; x<5; x++) {
-                        for(let z=4; z>=0; z--) {
-                            if(this.board[z][y][x] !== 0) { topMap[y][x] = this.board[z][y][x]; break; }
-                        }
-                    }
-                }
+                for(let y=0; y<5; y++) for(let x=0; x<5; x++) for(let z=4; z>=0; z--) if(this.board[z][y][x]!==0) { topMap[y][x]=this.board[z][y][x]; break; }
                 const dirs = [{dx:1, dy:0}, {dx:0, dy:1}, {dx:1, dy:1}, {dx:1, dy:-1}];
-                for(let y=0; y<5; y++) {
-                    for(let x=0; x<5; x++) {
-                        let color = topMap[y][x];
-                        if(color === 0) continue;
-                        for(let d of dirs) {
-                            let count = 1;
-                            for(let k=1; k<5; k++) {
-                                let nx = x + d.dx*k; let ny = y + d.dy*k;
-                                if(nx>=0 && nx<5 && ny>=0 && ny<5 && topMap[ny][nx]===color) count++; else break;
-                            }
-                            if(count === 5) return color;
+                for(let y=0; y<5; y++) for(let x=0; x<5; x++) {
+                    let c = topMap[y][x]; if(c===0) continue;
+                    for(let d of dirs) {
+                        let cnt=1; for(let k=1; k<5; k++) {
+                            let nx=x+d.dx*k, ny=y+d.dy*k;
+                            if(nx>=0&&nx<5&&ny>=0&&ny<5&&topMap[ny][nx]===c) cnt++; else break;
                         }
+                        if(cnt===5) return c;
                     }
                 }
                 return 0;
             }
+            undo() { if(this.history.length===0) return false; return false; /* 멀티땜에 미구현 */ }
         }
 
-        // ==========================================
-        // MCTS AI
-        // ==========================================
-        class MCTSEngine {
-            getLegalMoves(gameLogic, player) {
-                const moves = [];
-                if (gameLogic.blocksLeft[player] > 0) {
-                    for (let x=0; x<5; x++) {
-                        for (let y=0; y<5; y++) {
-                            for (let s=0; s<8; s++) {
-                                const shape = SHAPES[s];
-                                const cells = shape.map(d => ({x: x+d.x, y: y+d.y, z: d.z}));
-                                const check = gameLogic.checkValidity(player, cells, false, true);
-                                if (check.ok) moves.push({ type: 'place', cells, shapeIdx: s });
-                            }
-                        }
-                    }
-                } else {
-                    const myBlocks = gameLogic.blocks.filter(b => b.player === player && !b.isFixed);
-                    for (let block of myBlocks) {
-                        if (!gameLogic.canPick(block)) continue;
-                        const originalCells = JSON.parse(JSON.stringify(block.cells));
-                        gameLogic.removeBlock(block.id); 
-                        for (let x=0; x<5; x++) {
-                            for (let y=0; y<5; y++) {
-                                for (let s=0; s<8; s++) {
-                                    const shape = SHAPES[s];
-                                    const cells = shape.map(d => ({x: x+d.x, y: y+d.y, z: d.z}));
-                                    const check = gameLogic.checkValidity(player, cells, true, true, originalCells);
-                                    if (check.ok) moves.push({ type: 'move', fromId: block.id, cells, shapeIdx: s, originalCells });
-                                }
-                            }
-                        }
-                        gameLogic.addBlock(player, originalCells, block.shapeIdx);
-                    }
-                }
-                return moves;
-            }
-
-            getBestMove(realLogic) {
-                const logic = realLogic.clone(); 
-                const player = logic.currentPlayer;
-                const legalMoves = this.getLegalMoves(logic, player);
-                if (legalMoves.length === 0) return null;
-
-                for (let move of legalMoves) {
-                    const nextState = logic.clone();
-                    this.applyMove(nextState, move, player);
-                    if (nextState.checkWin() === player) return move;
-                }
-
-                let bestMove = null;
-                let maxScore = -Infinity;
-                const candidates = legalMoves.sort(() => 0.5 - Math.random()).slice(0, 25);
-
-                for (let move of candidates) {
-                    const nextState = logic.clone();
-                    this.applyMove(nextState, move, player);
-                    const score = this.evaluateState(nextState, player);
-                    if (score > maxScore) { maxScore = score; bestMove = move; }
-                }
-                return bestMove || legalMoves[0];
-            }
-
-            applyMove(logic, move, player) {
-                if (move.type === 'place') {
-                    logic.addBlock(player, move.cells, move.shapeIdx);
-                    logic.blocksLeft[player]--;
-                } else {
-                    let block = logic.blocks.find(b => b.id === move.fromId);
-                    if (!block && move.originalCells) {
-                        const oc = move.originalCells[0];
-                        block = logic.blocks.find(b => b.player === player && b.cells[0].x === oc.x && b.cells[0].y === oc.y);
-                    }
-                    if (block) {
-                        logic.removeBlock(block.id);
-                        logic.addBlock(player, move.cells, move.shapeIdx);
-                    }
-                }
-            }
-
-            evaluateState(logic, me) {
-                const opponent = me===1 ? 2:1;
-                if (logic.checkWin() === me) return 1000;
-                if (logic.checkWin() === opponent) return -1000;
-                let score = 0;
-                for(let b of logic.blocks) {
-                    if (b.player === me) {
-                        b.cells.forEach(c => {
-                            if (c.x===2 && c.y===2) score += 3;
-                            else if (c.x>=1 && c.x<=3 && c.y>=1 && c.y<=3) score += 1;
-                            score += c.z * 2; 
-                        });
-                    }
-                }
-                return score + Math.random();
-            }
-        }
-
-        // ==========================================
-        // View & Interaction
-        // ==========================================
+        // --- Interaction ---
+        const ai = new NeuralAI();
+        ai.load();
+        
         const logic = new GameLogic();
-        const mcts = new MCTSEngine();
         const logEl = document.getElementById('log-console');
         const aiLoader = document.getElementById('ai-loader');
 
@@ -558,93 +423,64 @@
             if(logEl.children.length > 4) logEl.removeChild(logEl.lastChild);
         }
 
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xdfe4ea);
+        const scene = new THREE.Scene(); scene.background = new THREE.Color(0xdfe4ea);
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
         camera.position.set(0, 14, 12); camera.lookAt(0,0,0);
-
         const renderer = new THREE.WebGLRenderer({antialias:true});
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
         document.getElementById('game-canvas').appendChild(renderer.domElement);
-
+        
         scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
-        dirLight.position.set(5,15,5); dirLight.castShadow = true; scene.add(dirLight);
-
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true; controls.maxPolarAngle = Math.PI / 2; controls.rotateSpeed = 0.7;
-
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7); dirLight.position.set(5,15,5); dirLight.castShadow=true; scene.add(dirLight);
+        const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping=true; controls.maxPolarAngle=Math.PI/2;
+        
         const boardGroup = new THREE.Group(); scene.add(boardGroup);
         const ghostGroup = new THREE.Group(); scene.add(ghostGroup);
         const hintGroup = new THREE.Group(); scene.add(hintGroup);
-
-        const hitPlane = new THREE.Mesh(new THREE.PlaneGeometry(6,6), new THREE.MeshBasicMaterial({ visible: false }));
-        hitPlane.material = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.0, side: THREE.DoubleSide, depthWrite: false });
-        hitPlane.rotation.x = -Math.PI/2; hitPlane.position.y = 0.5; scene.add(hitPlane);
-
+        
+        const hitPlane = new THREE.Mesh(new THREE.PlaneGeometry(6,6), new THREE.MeshBasicMaterial({ visible:false, side:THREE.DoubleSide }));
+        hitPlane.rotation.x=-Math.PI/2; hitPlane.position.y=0.5; scene.add(hitPlane);
         scene.add(new THREE.GridHelper(5,5, 0xbdc3c7, 0xecf0f1));
-        const basePlate = new THREE.Mesh(new THREE.BoxGeometry(5, 0.1, 5), new THREE.MeshStandardMaterial({color: 0xdeb887}));
-        basePlate.position.y = -0.05; basePlate.receiveShadow = true; scene.add(basePlate);
+        const basePlate = new THREE.Mesh(new THREE.BoxGeometry(5,0.1,5), new THREE.MeshStandardMaterial({color:0xdeb887}));
+        basePlate.position.y=-0.05; basePlate.receiveShadow=true; scene.add(basePlate);
 
-        let currentShapeIdx = 0;
-        let hoverX = -1, hoverY = -1;
-        let hoveredBlockId = null;
+        let currentShapeIdx=0, hoverX=-1, hoverY=-1, hoveredBlockId=null;
 
         function updateUI() {
             document.getElementById('p1-cnt').innerText = logic.blocksLeft[1];
             document.getElementById('p2-cnt').innerText = logic.blocksLeft[2];
-            const pName = logic.currentPlayer===1 ? "(흑 차례)" : "(백 차례)";
-            const pColor = logic.currentPlayer===1 ? "#e74c3c" : "#2ecc71";
-            document.getElementById('turn-indicator').innerText = pName;
-            document.getElementById('turn-indicator').style.color = pColor;
-            
-            const badge = document.getElementById('game-phase');
-            badge.innerText = logic.phase==='MOVEMENT'?"이동":"착수";
-            badge.style.background = logic.phase==='MOVEMENT'?"#e67e22":"#333";
-
-            const toggleBtn = document.getElementById('btn-ai-toggle');
-            if (logic.aiMode) {
-                toggleBtn.innerText = "🤖 AI 대전: ON";
-                toggleBtn.classList.add('active');
-            } else {
-                toggleBtn.innerText = "🤖 AI 대전: OFF";
-                toggleBtn.classList.remove('active');
-            }
+            document.getElementById('turn-indicator').innerText = logic.currentPlayer===1?"(흑 차례)":"(백 차례)";
+            document.getElementById('turn-indicator').style.color = logic.currentPlayer===1?"#e74c3c":"#2ecc71";
+            document.getElementById('game-phase').innerText = logic.phase==='MOVEMENT'?"이동":"착수";
+            document.getElementById('game-phase').style.background = logic.phase==='MOVEMENT'?"#e67e22":"#333";
+            const btn = document.getElementById('btn-ai-toggle');
+            btn.innerText = logic.aiMode ? "🤖 AI 대전: ON" : "🤖 AI 대전: OFF";
+            logic.aiMode ? btn.classList.add('active') : btn.classList.remove('active');
         }
 
         function renderBoard() {
             for(let i=boardGroup.children.length-1; i>=0; i--) boardGroup.remove(boardGroup.children[i]);
-            const CUBE_SIZE = 0.98;
-            const geo = new RoundedBoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE, 4, 0.1);
-            
-            logic.blocks.forEach(block => {
-                const isHovered = (block.id === hoveredBlockId);
-                let colorVal = block.player === 1 ? (isHovered ? 0x555555 : 0x333333) : (isHovered ? 0xffffff : 0xeeeeee);
-                const mat = new THREE.MeshStandardMaterial({ color: colorVal, roughness: 0.3, emissive: isHovered?0x333333:0x000000 });
-                const grp = new THREE.Group();
-                grp.userData = { id: block.id, isBlock: true };
-                block.cells.forEach(c => {
-                    const mesh = new THREE.Mesh(geo, mat);
-                    mesh.position.set(c.x-2, c.z+0.5, c.y-2);
-                    mesh.castShadow = true; mesh.receiveShadow = true;
-                    mesh.userData = { id: block.id, parentGroup: grp };
-                    grp.add(mesh);
+            const geo = new RoundedBoxGeometry(0.98,0.98,0.98, 4, 0.1);
+            logic.blocks.forEach(b => {
+                const isHov = b.id===hoveredBlockId;
+                const col = b.player===1 ? (isHov?0x555555:0x333333) : (isHov?0xffffff:0xeeeeee);
+                const mat = new THREE.MeshStandardMaterial({color:col, roughness:0.3});
+                const grp = new THREE.Group(); grp.userData={id:b.id, isBlock:true};
+                b.cells.forEach(c=>{
+                    const m = new THREE.Mesh(geo, mat); m.position.set(c.x-2, c.z+0.5, c.y-2);
+                    m.castShadow=true; m.receiveShadow=true; m.userData={id:b.id, parentGroup:grp}; grp.add(m);
                 });
-                const BRIDGE_THICK = 0.8; 
-                for(let i=0; i<block.cells.length; i++) {
-                    for(let j=i+1; j<block.cells.length; j++) {
-                        const c1 = block.cells[i]; const c2 = block.cells[j];
-                        const dist = Math.abs(c1.x-c2.x) + Math.abs(c1.y-c2.y) + Math.abs(c1.z-c2.z);
-                        if(dist === 1) {
-                            let bg;
-                            if (Math.abs(c1.x-c2.x)===1) bg = new THREE.BoxGeometry(1, BRIDGE_THICK, BRIDGE_THICK);
-                            else if (Math.abs(c1.y-c2.y)===1) bg = new THREE.BoxGeometry(BRIDGE_THICK, BRIDGE_THICK, 1);
-                            else bg = new THREE.BoxGeometry(BRIDGE_THICK, 1, BRIDGE_THICK);
-                            const b = new THREE.Mesh(bg, mat);
-                            b.position.set((c1.x+c2.x)/2-2, (c1.z+c2.z)/2+0.5, (c1.y+c2.y)/2-2);
-                            grp.add(b);
-                        }
+                // Bridge
+                for(let i=0; i<b.cells.length; i++) for(let j=i+1; j<b.cells.length; j++) {
+                    const c1=b.cells[i], c2=b.cells[j];
+                    if(Math.abs(c1.x-c2.x)+Math.abs(c1.y-c2.y)+Math.abs(c1.z-c2.z)===1) {
+                        let bg; 
+                        if(Math.abs(c1.x-c2.x)===1) bg=new THREE.BoxGeometry(1,0.8,0.8);
+                        else if(Math.abs(c1.y-c2.y)===1) bg=new THREE.BoxGeometry(0.8,0.8,1);
+                        else bg=new THREE.BoxGeometry(0.8,1,0.8);
+                        const br=new THREE.Mesh(bg, mat); br.position.set((c1.x+c2.x)/2-2, (c1.z+c2.z)/2+0.5, (c1.y+c2.y)/2-2);
+                        grp.add(br);
                     }
                 }
                 boardGroup.add(grp);
@@ -652,184 +488,182 @@
         }
 
         function updateGhost() {
-            while(ghostGroup.children.length > 0) ghostGroup.remove(ghostGroup.children[0]);
-            if(logic.winner !== 0) return;
-            if (isOnline && logic.currentPlayer !== myPlayerNum) return;
-
-            if(logic.phase === 'MOVEMENT' && !logic.selectedBlock) return; 
-            if(hoverX === -1) return;
-
-            const shape = SHAPES[currentShapeIdx % 8];
-            const cells = shape.map(c => ({x:hoverX+c.x, y:hoverY+c.y, z:c.z}));
-            const check = logic.checkValidity(logic.currentPlayer, cells, logic.phase==='MOVEMENT');
-            const color = check.ok ? 0x2ecc71 : 0xe74c3c;
-            drawGhostBlock(cells, color, ghostGroup, 0.6);
+            while(ghostGroup.children.length>0) ghostGroup.remove(ghostGroup.children[0]);
+            if(logic.winner!==0) return;
+            if(isOnline && logic.currentPlayer!==myPlayerNum) return;
+            if(logic.phase==='MOVEMENT' && !logic.selectedBlock) return;
+            if(hoverX===-1) return;
+            const sh = SHAPES[currentShapeIdx%8];
+            const cells = sh.map(c=>({x:hoverX+c.x, y:hoverY+c.y, z:c.z}));
+            const chk = logic.checkValidity(logic.currentPlayer, cells, logic.phase==='MOVEMENT');
+            drawGhost(cells, chk.ok?0x2ecc71:0xe74c3c, ghostGroup, 0.6);
         }
 
-        function drawGhostBlock(cells, color, group, opacity) {
-            const mat = new THREE.MeshBasicMaterial({color:color, transparent:true, opacity:opacity});
-            const geo = new RoundedBoxGeometry(0.96, 0.96, 0.96, 4, 0.1);
-            const OFFSET = 0.02;
-            cells.forEach(c => {
-                const mesh = new THREE.Mesh(geo, mat);
-                mesh.position.set(c.x-2, c.z+0.5+OFFSET, c.y-2);
-                group.add(mesh);
+        function drawGhost(cells, col, grp, op) {
+            const mat = new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:op});
+            const geo = new RoundedBoxGeometry(0.96,0.96,0.96, 4, 0.1);
+            cells.forEach(c=>{
+                const m = new THREE.Mesh(geo, mat); m.position.set(c.x-2, c.z+0.52, c.y-2);
+                grp.add(m);
             });
         }
 
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-        let downTime = 0;
+        const ray = new THREE.Raycaster(); const mouse = new THREE.Vector2();
+        window.addEventListener('mousemove', e=>{
+            mouse.x=(e.clientX/window.innerWidth)*2-1; mouse.y=-(e.clientY/window.innerHeight)*2+1;
+            ray.setFromCamera(mouse, camera);
+            
+            if(isOnline && logic.currentPlayer!==myPlayerNum) return;
 
-        window.addEventListener('mousemove', (e) => {
-            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera);
-
-            if (isOnline && logic.currentPlayer !== myPlayerNum) return;
-
-            if (logic.phase === 'MOVEMENT' && !logic.selectedBlock) {
-                const intersectsBlock = raycaster.intersectObjects(boardGroup.children, true);
-                if (intersectsBlock.length > 0) {
-                    const hitObj = intersectsBlock[0].object;
-                    const bId = hitObj.userData.id; 
-                    if (bId && bId !== hoveredBlockId) { hoveredBlockId = bId; renderBoard(); }
-                    hoverX = -1; updateGhost();
-                    return; 
-                } else if (hoveredBlockId !== null) { hoveredBlockId = null; renderBoard(); }
+            if(logic.phase==='MOVEMENT' && !logic.selectedBlock) {
+                const ints = ray.intersectObjects(boardGroup.children, true);
+                if(ints.length>0) {
+                    const bid = ints[0].object.userData.id;
+                    if(bid && bid!==hoveredBlockId) { hoveredBlockId=bid; renderBoard(); }
+                    hoverX=-1; updateGhost(); return;
+                } else if(hoveredBlockId!==null) { hoveredBlockId=null; renderBoard(); }
             }
-            const intersects = raycaster.intersectObject(hitPlane);
-            if(intersects.length > 0) {
-                const p = intersects[0].point;
-                const gx = Math.floor(p.x + 2.5); const gy = Math.floor(p.z + 2.5);
-                if(gx>=0 && gx<5 && gy>=0 && gy<5) {
-                    if(hoverX !== gx || hoverY !== gy) { hoverX = gx; hoverY = gy; updateGhost(); }
-                } else { hoverX = -1; updateGhost(); }
-            } else { hoverX = -1; updateGhost(); }
+            const ints = ray.intersectObject(hitPlane);
+            if(ints.length>0) {
+                const p=ints[0].point; const gx=Math.floor(p.x+2.5), gy=Math.floor(p.z+2.5);
+                if(gx>=0&&gx<5&&gy>=0&&gy<5) {
+                    if(hoverX!==gx||hoverY!==gy) { hoverX=gx; hoverY=gy; updateGhost(); }
+                } else { hoverX=-1; updateGhost(); }
+            } else { hoverX=-1; updateGhost(); }
         });
 
-        window.addEventListener('mousedown', () => downTime = Date.now());
-        window.addEventListener('mouseup', () => { if(Date.now() - downTime < 250) handleClick(); });
-        document.getElementById('btn-rotate').addEventListener('click', (e) => { e.stopPropagation(); currentShapeIdx++; updateGhost(); });
+        window.addEventListener('mousedown', ()=>downTime=Date.now());
+        window.addEventListener('mouseup', ()=>{ if(Date.now()-downTime<250) click(); });
+        let downTime=0;
+        document.getElementById('btn-rotate').addEventListener('click', e=>{ e.stopPropagation(); currentShapeIdx++; updateGhost(); });
 
-        function handleClick() {
-            if (logic.winner !== 0) return;
-            if (isOnline && logic.currentPlayer !== myPlayerNum) {
-                log("상대방 턴입니다.");
-                return;
-            }
+        function click() {
+            if(logic.winner!==0) return;
+            if(isOnline && logic.currentPlayer!==myPlayerNum) return;
+            while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]);
 
-            while(hintGroup.children.length > 0) hintGroup.remove(hintGroup.children[0]);
-
-            if (logic.phase === 'MOVEMENT' && !logic.selectedBlock) {
-                if (hoveredBlockId) {
-                    const block = logic.blocks.find(b => b.id === hoveredBlockId);
-                    if (block) {
-                        const c = block.cells[0];
-                        const res = logic.pickBlock(c.x, c.y, c.z);
-                        if(res.ok) {
-                            log("선택됨. 이동할 곳 클릭.");
-                            currentShapeIdx = res.block.shapeIdx; 
-                            hoveredBlockId = null; renderBoard();
-                        } else { log(`🚫 ${res.msg}`); }
+            if(logic.phase==='MOVEMENT' && !logic.selectedBlock) {
+                if(hoveredBlockId) {
+                    const b = logic.blocks.find(x=>x.id===hoveredBlockId);
+                    if(b) {
+                        const res = logic.pickBlock(b.cells[0].x, b.cells[0].y, b.cells[0].z);
+                        if(res.ok) { log("블록 선택됨"); currentShapeIdx=res.block.shapeIdx; hoveredBlockId=null; renderBoard(); }
+                        else log(res.msg);
                     }
                 }
                 return;
             }
+            if(hoverX!==-1) {
+                const sh = SHAPES[currentShapeIdx%8];
+                const cells = sh.map(c=>({x:hoverX+c.x, y:hoverY+c.y, z:c.z}));
+                const chk = logic.checkValidity(logic.currentPlayer, cells, logic.phase==='MOVEMENT');
+                if(chk.ok) {
+                    logic.confirmMove(cells, currentShapeIdx%8);
+                    log("착수 완료"); renderBoard(); updateUI(); updateGhost();
+                } else log(chk.msg);
+            }
+        }
 
-            if (hoverX !== -1) {
-                const shape = SHAPES[currentShapeIdx % 8];
-                const cells = shape.map(c => ({x:hoverX+c.x, y:hoverY+c.y, z:c.z}));
-                const check = logic.checkValidity(logic.currentPlayer, cells, logic.phase==='MOVEMENT');
+        // --- AI Logic Integration ---
+        async function getAIMove() {
+            if(!ai.ready) { log("AI 로딩중..."); return null; }
+            aiLoader.style.display = 'block';
+            
+            // 1. 현재 보드 상태로 추론 (점수 계산)
+            const scores = ai.predict(logic.board);
+            
+            // 2. 점수 높은 순으로 정렬
+            const candidates = scores.map((val, idx) => ({ idx, val })).sort((a, b) => b.val - a.val);
+            
+            // 3. 유효한 수 찾기
+            let bestMove = null;
+            
+            if (logic.phase === 'PLACEMENT') {
+                for (let c of candidates) {
+                    const {x, y, shapeIdx} = decodeAction(c.idx);
+                    const sh = SHAPES[shapeIdx];
+                    const cells = sh.map(d=>({x:x+d.x, y:y+d.y, z:d.z}));
+                    if(logic.checkValidity(logic.currentPlayer, cells).ok) {
+                        bestMove = { type:'place', cells, shapeIdx };
+                        break; 
+                    }
+                }
+            } else {
+                // Movement: 내 블록들을 하나씩 빼보고(simulation), 갈 수 있는 가장 높은 점수 위치 찾기
+                const myBlocks = logic.blocks.filter(b => b.player === logic.currentPlayer && !b.isFixed);
+                let maxScore = -Infinity;
                 
-                if (check.ok) {
-                    const win = logic.confirmMove(cells, currentShapeIdx);
-                    log(`착수 완료`);
-                    updateUI(); renderBoard(); updateGhost();
-                } else { log(`🚫 ${check.msg}`); }
+                for (let b of myBlocks) {
+                    if(!logic.canPick(b)) continue;
+                    
+                    // 임시 제거
+                    const originalCells = JSON.parse(JSON.stringify(b.cells));
+                    logic.removeBlock(b.id); 
+                    
+                    // 점수 높은 곳 부터 체크
+                    for (let c of candidates) {
+                        if (c.val <= maxScore) break; // 이미 찾은 수보다 점수 낮으면 스킵 (최적화)
+                        
+                        const {x, y, shapeIdx} = decodeAction(c.idx);
+                        const sh = SHAPES[shapeIdx];
+                        const cells = sh.map(d=>({x:x+d.x, y:y+d.y, z:d.z}));
+                        
+                        // 유효성 체크 (isMovement=true)
+                        if(logic.checkValidity(logic.currentPlayer, cells, true, originalCells).ok) {
+                            maxScore = c.val;
+                            bestMove = { type:'move', fromId:b.id, cells, shapeIdx, score: c.val };
+                            break; // 이 블록으로는 이게 최선 (점수 정렬되어 있으므로)
+                        }
+                    }
+                    // 복구 (주의: ID 변경됨, 하지만 Loop 내에선 영향 없음)
+                    logic.addBlock(logic.currentPlayer, originalCells, b.shapeIdx, false);
+                    // *중요* addBlock으로 복구하면 ID가 바뀌어서 다음 loop의 logic.blocks에 영향 줄 수 있음.
+                    // 원래 ID로 복구해야 함.
+                    logic.blocks[logic.blocks.length-1].id = b.id; 
+                }
+            }
+            
+            aiLoader.style.display = 'none';
+            return bestMove;
+        }
+
+        window.askAI = async () => {
+            if(logic.winner!==0) return;
+            const move = await getAIMove();
+            if(move) {
+                while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]);
+                if(move.type==='move') {
+                    const src = logic.blocks.find(b=>b.id===move.fromId);
+                    if(src) drawGhost(src.cells, 0xff4444, hintGroup, 0.6);
+                    log("🔴 빨강 -> 🟡 노랑 이동");
+                } else log("🟡 노랑 위치 착수");
+                drawGhost(move.cells, 0xf1c40f, hintGroup, 0.8);
+            } else log("AI: 둘 곳이 없어요.");
+        };
+
+        async function runAI() {
+            const move = await getAIMove();
+            if(move) {
+                if(move.type==='place') logic.confirmMove(move.cells, move.shapeIdx);
+                else {
+                    const b = logic.blocks.find(x=>x.id===move.fromId);
+                    if(b) {
+                        logic.selectedBlockOriginalCells = JSON.parse(JSON.stringify(b.cells));
+                        logic.removeBlock(b.id); logic.selectedBlock = b;
+                        logic.confirmMove(move.cells, move.shapeIdx);
+                    }
+                }
+                log("AI 착수함"); renderBoard(); updateUI(); updateGhost();
             }
         }
 
         window.toggleAIMode = () => {
-            logic.aiMode = !logic.aiMode;
-            updateUI();
-            log(`AI 모드: ${logic.aiMode ? "ON" : "OFF"}`);
-            // 싱글 모드에서 백돌 턴이면 바로 AI 시작
-            if (!isOnline && logic.aiMode && logic.currentPlayer === 2) triggerAI();
+            logic.aiMode = !logic.aiMode; updateUI();
+            if(!isOnline && logic.aiMode && logic.currentPlayer===2) runAI();
         };
-
-        window.askAI = () => {
-            if (logic.winner !== 0) return;
-            log("AI가 훈수 두는 중...");
-            aiLoader.style.display = 'block';
-            setTimeout(() => {
-                const bestMove = mcts.getBestMove(logic);
-                aiLoader.style.display = 'none';
-                if (bestMove) {
-                    while(hintGroup.children.length > 0) hintGroup.remove(hintGroup.children[0]);
-                    if (bestMove.type === 'move') {
-                        const srcBlock = logic.blocks.find(b => b.id === bestMove.fromId);
-                        if (srcBlock) drawGhostBlock(srcBlock.cells, 0xff4444, hintGroup, 0.6);
-                        drawGhostBlock(bestMove.cells, 0xf1c40f, hintGroup, 0.8);
-                        log("⚠️ [힌트] 빨간 블록을 -> 노란 위치로 옮기세요.");
-                    } else {
-                        drawGhostBlock(bestMove.cells, 0xf1c40f, hintGroup, 0.8);
-                        log("💡 [힌트] 노란 위치에 두세요.");
-                    }
-                } else { log("둘 수 있는 곳이 없습니다."); }
-            }, 100);
-        };
-
-        function triggerAI() {
-            if (logic.winner !== 0) return;
-            aiLoader.style.display = 'block';
-            setTimeout(() => {
-                const bestMove = mcts.getBestMove(logic);
-                aiLoader.style.display = 'none';
-                if (bestMove) {
-                    if (bestMove.type === 'place') {
-                        logic.confirmMove(bestMove.cells, bestMove.shapeIdx);
-                    } else {
-                        const block = logic.blocks.find(b => b.id === bestMove.fromId);
-                        if (block) {
-                            logic.saveState();
-                            logic.selectedBlockOriginalCells = JSON.parse(JSON.stringify(block.cells));
-                            logic.removeBlock(block.id);
-                            logic.selectedBlock = block; 
-                            logic.confirmMove(bestMove.cells, bestMove.shapeIdx);
-                        }
-                    }
-                    log("🤖 AI 착수 완료");
-                    updateUI(); renderBoard(); updateGhost();
-                    if (logic.winner !== 0) setTimeout(() => alert(`Player ${logic.winner} 승리!`), 100);
-                } else {
-                    log("AI 기권");
-                }
-            }, 500);
-        }
-
-        window.undo = () => { 
-            // 멀티플레이가 아니거나(싱글), 아직 연결 안됐으면 무르기 허용
-            if(!isOnline && logic.undo()) { 
-                log("무르기 완료"); 
-                hoveredBlockId=null; 
-                while(hintGroup.children.length > 0) hintGroup.remove(hintGroup.children[0]);
-                renderBoard(); updateUI(); updateGhost(); 
-            } 
-        };
-        window.resetGame = () => { 
-            if(!isOnline && confirm("초기화?")) { 
-                logic.reset(); hoveredBlockId=null; 
-                while(hintGroup.children.length > 0) hintGroup.remove(hintGroup.children[0]); 
-                renderBoard(); updateUI(); log("초기화됨"); 
-            } 
-        };
-        window.addEventListener('keydown', (e) => { 
-            if(e.code==='KeyR') { currentShapeIdx++; updateGhost(); } 
-            if(e.code==='KeyZ') window.undo(); 
-        });
-        window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
-
+        window.undo = () => { if(!isOnline && logic.undo()) { log("무르기"); hoveredBlockId=null; renderBoard(); updateUI(); } };
+        window.resetGame = () => { if(!isOnline && confirm("초기화?")) { logic.reset(); renderBoard(); updateUI(); } };
+        window.addEventListener('resize', () => { camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
         function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
         renderBoard(); updateUI(); animate();
     </script>
