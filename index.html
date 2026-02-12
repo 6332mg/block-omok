@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>대학전쟁: 블록 오목 (Legendary AI)</title>
+    <title>대학전쟁: 블록 오목 (God Tier AI)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; background: #dfe4ea; font-family: 'Pretendard', sans-serif; user-select: none; -webkit-touch-callout: none; }
@@ -55,9 +55,9 @@
         #ai-loader { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 15px 30px; border-radius: 30px; font-weight: bold; font-size: 1.2rem; z-index: 50; pointer-events: none; backdrop-filter: blur(5px); }
         #my-player-badge { font-size: 0.8rem; font-weight: bold; padding: 4px 10px; border-radius: 15px; display: inline-block; color: white; }
         
-        #win-rate-bar-container { position: absolute; top: 130px; right: 10px; width: 12px; height: 150px; background: #ddd; border-radius: 6px; overflow: hidden; border: 1px solid #999; z-index: 5; pointer-events: none; display: none; }
-        #win-rate-fill { width: 100%; height: 50%; background: linear-gradient(to top, #2c3e50, #4ca1af); transition: height 0.5s ease-out; position: absolute; bottom: 0; }
-        #win-rate-text { position: absolute; top: 110px; right: 30px; font-size: 0.8rem; font-weight: bold; color: #333; text-align: right; width: 120px; text-shadow: 1px 1px 0 rgba(255,255,255,0.8); display: none; }
+        #win-rate-bar-container { position: absolute; top: 130px; right: 10px; width: 12px; height: 150px; background: #ecf0f1; border-radius: 6px; overflow: hidden; border: 1px solid #bdc3c7; z-index: 5; pointer-events: none; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        #win-rate-fill { width: 100%; height: 50%; background: linear-gradient(to top, #34495e, #e74c3c); transition: height 0.5s ease-out; position: absolute; bottom: 0; }
+        #win-rate-text { position: absolute; top: 110px; right: 30px; font-size: 0.8rem; font-weight: bold; color: #2c3e50; text-align: right; width: 120px; text-shadow: 1px 1px 0 rgba(255,255,255,0.8); display: none; }
 
         .modal-overlay { pointer-events: auto; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 300; }
         .modal-content { background: white; width: 85%; max-width: 500px; max-height: 85%; border-radius: 12px; padding: 25px; overflow-y: auto; position: relative; text-align: center; }
@@ -87,7 +87,7 @@
                 <button class="lobby-btn btn-join" onclick="joinRoom()">방 참가하기 (Join)</button>
 
                 <div class="ai-status-box">
-                    <span id="ai-status-text">⏳ AI 엔진 로딩 중...</span>
+                    <span id="ai-status-text">⏳ AI 엔진 대기 중...</span>
                     <label for="ai-file-input" class="manual-upload">[수동 업로드]</label>
                     <input type="file" id="ai-file-input" accept=".onnx" style="display:none;" onchange="loadCustomAI(this)">
                 </div>
@@ -213,7 +213,6 @@
         let isOnline = false;
         let isSpectator = false;
         let myNickname = "Player";
-        // 🟢 neuralWeights 변수 제거하고, aiInstance 로 관리
         let p1Name = "흑", p2Name = "백";
 
         window.goHome = () => { if(confirm("게임에서 나가시겠습니까?")) { location.hash = ""; } };
@@ -233,16 +232,12 @@
             }
         });
 
-        // 🌟 NeuralAI (ONNX 버전으로 전면 수정)
+        // 🌟 NeuralAI (ONNX 버전)
         class NeuralAI {
-            constructor() {
-                this.session = null;
-                this.ready = false;
-            }
-
+            constructor() { this.session = null; this.ready = false; }
             async init(url) {
                 try {
-                    // ONNX Runtime 로드
+                    document.getElementById('ai-status-text').innerText = "⏳ ONNX 로딩 중...";
                     this.session = await ort.InferenceSession.create(url);
                     this.ready = true;
                     document.getElementById('ai-status-text').innerText = "✅ AI 장착 완료!";
@@ -253,87 +248,50 @@
                     document.getElementById('ai-status-text').style.color = "red";
                 }
             }
-
-            // ONNX 추론 실행 (비동기)
             async computeLogits(logic, player) {
-                if (!this.ready) return new Array(200).fill(0); // 준비 안됐으면 0 반환
-
-                // 1. 입력 데이터 생성 [1, 2, 5, 5, 5]
+                if (!this.ready) return new Array(200).fill(0);
                 const inputData = new Float32Array(1 * 2 * 5 * 5 * 5);
                 const opp = player === 1 ? 2 : 1;
                 let idx = 0;
-
-                // Channel 0: My Stones
                 for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) inputData[idx++] = (logic.board[z][y][x] === player ? 1.0 : 0.0);
-                // Channel 1: Opponent Stones
                 for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) inputData[idx++] = (logic.board[z][y][x] === opp ? 1.0 : 0.0);
-
-                // 2. 추론
                 const tensor = new ort.Tensor('float32', inputData, [1, 2, 5, 5, 5]);
-                const feeds = { input: tensor };
-                const results = await this.session.run(feeds);
-                return results.output.data; // Logits 배열 반환
+                const results = await this.session.run({ input: tensor });
+                return results.output.data;
             }
-
-            // 기존 구조 호환을 위해 유지 (내부는 ONNX 사용하도록 변경)
             async getBestMove(logic, player) {
-                // 1. Placement Phase
                 if (logic.phase === 'PLACEMENT') {
                     if (logic.blocksLeft[player] <= 0) return null;
                     return await this.computeBestPlacement(logic, player);
-                }
-                // 2. Movement Phase
-                else if (logic.phase === 'MOVEMENT') {
-                    // 기존 로직 유지하되 computeLogits만 비동기 호출
-                    let bestScore = -Infinity;
-                    let bestMove = null;
+                } else if (logic.phase === 'MOVEMENT') {
+                    let bestScore = -Infinity; let bestMove = null;
                     const myBlocks = logic.blocks.filter(b => b.player === player && !b.isFixed);
-
                     for (const block of myBlocks) {
                         if (!logic.canPick(block)) continue;
                         const tempLogic = logic.clone();
                         tempLogic.removeBlock(block.id);
                         tempLogic.selectedBlockOriginalCells = block.cells;
-
-                        const logits = await this.computeLogits(tempLogic, player); // 🟢 await 추가
-
-                        const topActions = Array.from(logits)
-                            .map((score, idx) => ({ score, idx }))
-                            .sort((a, b) => b.score - a.score)
-                            .slice(0, 20);
-
+                        const logits = await this.computeLogits(tempLogic, player);
+                        const topActions = Array.from(logits).map((score, idx) => ({ score, idx })).sort((a, b) => b.score - a.score).slice(0, 20);
                         for (const action of topActions) {
                             if (action.score <= bestScore) continue;
-                            const sh = action.idx % 8;
-                            const px = Math.floor(action.idx / 8) % 5;
-                            const py = Math.floor(Math.floor(action.idx / 8) / 5);
-                            let baseCells = getCellsFromBase(px, py, sh);
-                            let validZFound = false;
-                            let finalCells = null;
-
+                            const sh = action.idx % 8; const px = Math.floor(action.idx / 8) % 5; const py = Math.floor(Math.floor(action.idx / 8) / 5);
+                            let baseCells = getCellsFromBase(px, py, sh); let validZFound = false; let finalCells = null;
                             for (let dz = 0; dz < 5; dz++) {
                                 const testCells = baseCells.map(c => ({ x: c.x, y: c.y, z: c.z + dz }));
                                 if (testCells.some(c => c.z > 4)) break;
-                                const check = tempLogic.checkValidity(player, testCells, true, block.cells);
-                                if (check.ok) { finalCells = testCells; validZFound = true; break; }
+                                if (tempLogic.checkValidity(player, testCells, true, block.cells).ok) { finalCells = testCells; validZFound = true; break; }
                             }
-
-                            if (validZFound && finalCells) {
-                                bestScore = action.score;
-                                bestMove = { type: 'move', fromId: block.id, cells: finalCells, shapeIdx: sh };
-                            }
+                            if (validZFound && finalCells) { bestScore = action.score; bestMove = { type: 'move', fromId: block.id, cells: finalCells, shapeIdx: sh }; }
                         }
                     }
                     return bestMove;
                 }
                 return null;
             }
-
             async computeBestPlacement(logic, player) {
-                const logits = await this.computeLogits(logic, player); // 🟢 await 추가
-                const validActions = [];
-                const actionToMove = {};
-
+                const logits = await this.computeLogits(logic, player);
+                const validActions = []; const actionToMove = {};
                 for(let i=0; i<200; i++) {
                     const sh = i % 8; const px = Math.floor(i / 8) % 5; const py = Math.floor(Math.floor(i / 8) / 5); 
                     let baseCells = getCellsFromBase(px, py, sh); 
@@ -341,12 +299,10 @@
                     for (let dz = 0; dz < 5; dz++) {
                         const testCells = baseCells.map(c => ({ x: c.x, y: c.y, z: c.z + dz }));
                         if (testCells.some(c => c.z > 4)) break;
-                        const check = logic.checkValidity(player, testCells);
-                        if (check.ok) { finalCells = testCells; validZFound = true; break; }
+                        if (logic.checkValidity(player, testCells).ok) { finalCells = testCells; validZFound = true; break; }
                     }
                     if (validZFound && finalCells) { validActions.push(i); actionToMove[i] = { type: 'place', cells: finalCells, shapeIdx: sh }; }
                 }
-
                 if (validActions.length === 0) return null;
                 let bestIdx = -1; let maxVal = -Infinity;
                 for (let idx of validActions) { if (logits[idx] > maxVal) { maxVal = logits[idx]; bestIdx = idx; } }
@@ -354,51 +310,43 @@
             }
         }
 
-        // 🌟 MCTSAI 수정: NeuralAI 호출 시 await 사용
+        // 🌟 MCTSAI 수정: NeuralAI 호출 및 승률 계산용 시뮬레이션
         class MCTSAI {
             constructor() { this.ready = true; }
             async getBestMove(logic, player, iterations = 1500, onThinkingCallback = null) {
                 const validMoves = getAllValidMoves(logic, player);
                 if (validMoves.length === 0) return null;
-                
                 for (let move of validMoves) if (this.simulateOneMove(logic, player, move) === player) return move;
-                
                 const opponent = player === 1 ? 2 : 1; 
                 const myState = logic.clone(); 
                 const oppMoves = getAllValidMoves(myState, opponent); 
                 const threatMoves = [];
-                for (let opMove of oppMoves) {
-                    if (this.simulateOneMove(myState, opponent, opMove) === opponent) threatMoves.push(opMove);
-                }
+                for (let opMove of oppMoves) if (this.simulateOneMove(myState, opponent, opMove) === opponent) threatMoves.push(opMove);
                 if (threatMoves.length > 0) {
                     for (let myMove of validMoves) {
                         const testState = logic.clone(); 
                         this.applyMove(testState, player, myMove); 
                         let safe = true; 
                         const nextOppMoves = getAllValidMoves(testState, opponent);
-                        for (let nom of nextOppMoves) {
-                            if (this.simulateOneMove(testState, opponent, nom) === opponent) { safe = false; break; }
-                        }
+                        for (let nom of nextOppMoves) if (this.simulateOneMove(testState, opponent, nom) === opponent) { safe = false; break; }
                         if (safe) return myMove;
                     }
                 }
-
-                // 🟢 신경망 (ONNX) 사용: 여기서 neuralAI 인스턴스를 씀
+                // 🟢 신경망 (ONNX) 사용
                 if (neuralAI.ready && logic.phase !== 'MOVEMENT') {
                     try { 
-                        // await 추가됨
                         const neuralMove = await neuralAI.getBestMove(logic, player); 
                         if (neuralMove) { 
                             if (onThinkingCallback) onThinkingCallback(neuralMove); 
                             await new Promise(r => setTimeout(r, 500)); 
+                            log("🧠 AI(직관): 착수");
                             return neuralMove; 
                         } 
                     } catch (e) { console.error("Neural Fail", e); }
                 }
-
+                log("🌲 AI(수읽기): 계산 중...");
                 const root = { state: logic.clone(), player: player, parent: null, children: [], visits: 0, wins: 0, move: null };
-                const start = Date.now(); 
-                let lastYield = Date.now();
+                const start = Date.now(); let lastYield = Date.now();
                 while ((Date.now() - start < 2500) || iterations > 0) {
                     if (Date.now() - lastYield > 30) {
                         let currentBestNode = null; let maxV = -1;
@@ -417,18 +365,23 @@
                 for (const child of root.children) { if (child.visits > maxVisits) { maxVisits = child.visits; bestChild = child; } }
                 return bestChild ? bestChild.move : validMoves[0];
             }
-            getWinRate(logic, player, iterations = 500) {
-                const root = { state: logic.clone(), player: player, parent: null, children: [], visits: 0, wins: 0, move: null };
-                const start = Date.now();
-                while (iterations > 0 && Date.now() - start < 500) {
-                    let node = this.select(root); 
-                    if (!node.state.winner && node.visits > 0) node = this.expand(node);
-                    const winner = this.simulateHeavy(node.state, node.player); 
-                    this.backpropagate(node, winner); 
-                    iterations--;
+            // 🌟 승률 계산: 무작위 시뮬레이션 (Monte Carlo)
+            calcWinRate(logic, simulCount=200) {
+                let blackWins = 0;
+                // 플레이어가 누구든 항상 '현재 상태'에서 시뮬레이션
+                for(let i=0; i<simulCount; i++) {
+                    const tempState = logic.clone();
+                    let depth = 0;
+                    while(tempState.winner === 0 && depth < 40) {
+                        const moves = getAllValidMoves(tempState, tempState.currentPlayer);
+                        if(moves.length === 0) break;
+                        const rndMove = moves[Math.floor(Math.random() * moves.length)];
+                        this.applyMove(tempState, tempState.currentPlayer, rndMove);
+                        depth++;
+                    }
+                    if(tempState.winner === 1) blackWins++;
                 }
-                if (root.visits === 0) return 50;
-                return Math.max(0, Math.min(100, (root.wins / root.visits) * 100));
+                return (blackWins / simulCount) * 100;
             }
             select(node) { while (node.children.length > 0) { node = node.children.reduce((best, child) => { const ucb1 = (child.wins / (child.visits + 1e-6)) + 1.41 * Math.sqrt(Math.log(node.visits + 1) / (child.visits + 1e-6)); const bestUcb1 = (best.wins / (best.visits + 1e-6)) + 1.41 * Math.sqrt(Math.log(node.visits + 1) / (best.visits + 1e-6)); return ucb1 > bestUcb1 ? child : best; }); } return node; }
             expand(node) { const moves = getAllValidMoves(node.state, node.player); for (const move of moves) { const newState = node.state.clone(); this.applyMove(newState, node.player, move); node.children.push({ state: newState, player: newState.currentPlayer, parent: node, children: [], visits: 0, wins: 0, move: move }); } return node.children.length > 0 ? node.children[Math.floor(Math.random() * node.children.length)] : node; }
@@ -441,12 +394,7 @@
                     const currentPlayer = tempState.currentPlayer; 
                     const moves = getAllValidMoves(tempState, currentPlayer); 
                     if (moves.length === 0) break; 
-                    let chosenMove = null; 
-                    for (let i = 0; i < moves.length; i++) { 
-                        if (moves.length > 20 && i > 10 && Math.random() > 0.4) continue; 
-                        if (this.simulateOneMove(tempState, currentPlayer, moves[i]) === currentPlayer) { chosenMove = moves[i]; break; } 
-                    } 
-                    if (!chosenMove) chosenMove = moves[Math.floor(Math.random() * moves.length)]; 
+                    let chosenMove = moves[Math.floor(Math.random() * moves.length)]; 
                     this.applyMove(tempState, currentPlayer, chosenMove); 
                     depth++; 
                 } 
@@ -583,25 +531,21 @@
             return moves;
         }
 
-        // 🟢 neuralWeights 제거, NeuralAI 인스턴스 생성
         const neuralAI = new NeuralAI();
         const ai = new MCTSAI(); const logic = new GameLogic(); const logEl = document.getElementById('log-console'); const aiLoader = document.getElementById('ai-loader');
         
-        // 🟢 .json 대신 .onnx 자동 로드 시도
         async function autoLoadAI() { 
             try { 
-                // 같은 폴더의 'omok_model.onnx' 파일 확인 (서버 필요)
-                // 만약 로컬 파일 실행(file://)이라면 실패할 수 있음
+                // 1초 뒤에 로드 시도 (라이브러리 초기화 대기)
+                await new Promise(r => setTimeout(r, 1000));
                 await neuralAI.init('omok_model.onnx');
             } catch (e) { console.log("Manual load required"); } 
         } 
         autoLoadAI();
 
-        // 🟢 수동 업로드 핸들러 수정
         window.loadCustomAI = (input) => { 
             const f = input.files[0]; 
             if(!f) return; 
-            // Blob URL 생성해서 ONNX 로드
             const url = URL.createObjectURL(f);
             neuralAI.init(url);
         };
@@ -639,6 +583,7 @@
             document.getElementById('btn-reset').style.display = isOnline ? 'none' : 'inline-block';
         }
         
+        // 🌟 승률 표시 함수 (싱글/멀티 공통)
         function updateWinRateUI() {
             if (logic.winner !== 0) { 
                 document.getElementById('win-rate-text').innerText = logic.winner === 1 ? "흑 승리!" : "백 승리!"; 
@@ -646,8 +591,8 @@
                 return; 
             }
             setTimeout(() => { 
-                const winRate = ai.getWinRate(logic, logic.currentPlayer, 500); 
-                let blackWinRate = logic.currentPlayer === 1 ? winRate : (100 - winRate); 
+                // Monte Carlo 시뮬레이션으로 흑돌 승률 계산
+                const blackWinRate = ai.calcWinRate(logic, 200); // 200판 시뮬레이션
                 document.getElementById('win-rate-text').innerText = `흑 승률: ${Math.round(blackWinRate)}%`; 
                 document.getElementById('win-rate-fill').style.height = `${Math.round(blackWinRate)}%`; 
             }, 10);
@@ -815,4 +760,4 @@
         renderBoard(); updateUI(); animate();
     </script>
 </body>
-</html>
+</html>```
