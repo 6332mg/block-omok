@@ -187,47 +187,86 @@
         // [코드 생략: 제공해주신 전체 코드를 여기에 붙여넣으세요. 변경 사항이 잘 반영되어 있습니다.]
         
         // (NeuralAI 클래스 정의)
+        // (NeuralAI 클래스 수정본: 높이 계산 및 이동 단계 예외 처리 추가)
+        // [수정됨] PyTorch 가중치 구조에 맞춘 NeuralAI
         class NeuralAI {
-            constructor(weights) { this.weights = weights; this.ready = true; }
+            constructor(weights) { 
+                this.weights = weights; 
+                this.ready = true; 
+            }
+
             getBestMove(logic, player) {
+                // 이동 단계(MOVEMENT)거나 블록이 없으면 MCTS에게 위임
+                if (logic.phase === 'MOVEMENT' || logic.blocksLeft[player] <= 0) return null;
+
                 const validActions = [];
                 const actionToMove = {};
-                if (logic.blocksLeft[player] > 0) {
-                    for(let i=0; i<200; i++) {
-                        const sh = i % 8;
-                        const px = Math.floor(i / 8) % 5;
-                        const py = Math.floor(Math.floor(i / 8) / 5);
-                        const cells = getCellsFromBase(px, py, sh);
-                        if (logic.checkValidity(player, cells).ok) {
-                            validActions.push(i);
-                            actionToMove[i] = { type: 'place', cells, shapeIdx: sh };
+                
+                // 0~199번 모든 행동 탐색
+                for(let i=0; i<200; i++) {
+                    const sh = i % 8; 
+                    const px = Math.floor(i / 8) % 5; 
+                    const py = Math.floor(Math.floor(i / 8) / 5); 
+                    
+                    // [중력 로직 유지] AI가 1층만 학습했더라도, 실제 게임에선 위로 쌓을 수 있게 보정
+                    let baseCells = getCellsFromBase(px, py, sh);
+                    let validZFound = false;
+                    let finalCells = null;
+
+                    for (let dz = 0; dz < 5; dz++) {
+                        const testCells = baseCells.map(c => ({ x: c.x, y: c.y, z: c.z + dz }));
+                        if (testCells.some(c => c.z > 4)) break;
+                        
+                        const check = logic.checkValidity(player, testCells);
+                        if (check.ok) {
+                            finalCells = testCells;
+                            validZFound = true;
+                            break; 
                         }
                     }
-                } else return null;
+
+                    if (validZFound && finalCells) {
+                        validActions.push(i);
+                        actionToMove[i] = { type: 'place', cells: finalCells, shapeIdx: sh };
+                    }
+                }
 
                 if (validActions.length === 0) return null;
 
+                // [입력 데이터 생성] 순서: Z(0->4) -> Y(0->4) -> X(0->4) (파이썬 flatten 순서와 일치시킴)
                 const obs = [];
                 const opp = player === 1 ? 2 : 1;
+                // 내 돌 (125개)
                 for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) obs.push(logic.board[z][y][x] === player ? 1 : 0);
+                // 상대 돌 (125개)
                 for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) obs.push(logic.board[z][y][x] === opp ? 1 : 0);
 
+                // [신경망 연산] PyTorch 가중치 형태([Out][In])에 맞춰 matMul 수정됨
+                // PPO의 기본 활성화 함수는 Tanh입니다.
                 let h1 = this.matMul(obs, this.weights.fc0_w, this.weights.fc0_b).map(x => Math.tanh(x));
                 let h2 = this.matMul(h1, this.weights.fc1_w, this.weights.fc1_b).map(x => Math.tanh(x));
-                const logits = this.matMul(h2, this.weights.fc2_w, this.weights.fc2_b);
+                const logits = this.matMul(h2, this.weights.fc2_w, this.weights.fc2_b); // 마지막은 활성화 함수 없음
 
                 let bestIdx = -1;
                 let maxVal = -Infinity;
+                
+                // 유효한 수 중에서 가장 확률(logit)이 높은 수 선택
                 for (let idx of validActions) {
                     if (logits[idx] > maxVal) { maxVal = logits[idx]; bestIdx = idx; }
                 }
                 return bestIdx !== -1 ? actionToMove[bestIdx] : null;
             }
+            
+            // [중요 수정] PyTorch Linear 레이어 (y = xA^T + b) 연산 구현
+            // w는 [output_dim][input_dim] 형태입니다.
             matMul(input, w, b) {
                 const output = new Array(b.length).fill(0);
-                for (let j = 0; j < b.length; j++) {
+                for (let j = 0; j < b.length; j++) { // j: Output Neuron Index
                     let sum = b[j];
-                    for (let i = 0; i < input.length; i++) sum += input[i] * w[i][j];
+                    for (let i = 0; i < input.length; i++) { // i: Input Index
+                        // w[j][i]로 접근해야 함 (이전 코드는 w[i][j]였음 -> 오류 원인)
+                        sum += input[i] * w[j][i];
+                    }
                     output[j] = sum;
                 }
                 return output;
@@ -496,7 +535,69 @@
 
         // ... (나머지 getAllValidMoves, main setup 등) ...
         // [코드 생략: getAllValidMoves부터 끝까지 기존과 동일. 단, autoLoadAI 함수가 추가됨]
+        // 모든 유효한 수를 찾는 함수 (MCTS 및 이동 단계용 필수 함수)
+        function getAllValidMoves(logic, player) {
+            const moves = [];
+            
+            // 1. 착수 단계 (Placement)
+            if (logic.phase === 'PLACEMENT') {
+                if (logic.blocksLeft[player] > 0) {
+                    // 보드의 모든 위치(x,y)와 모든 모양(sh)에 대해 탐색
+                    for (let sh = 0; sh < 8; sh++) {
+                        for (let y = 0; y < 5; y++) {
+                            for (let x = 0; x < 5; x++) {
+                                // NeuralAI와 마찬가지로 바닥부터 위로 훑으며 가능한 곳 찾기
+                                let baseCells = getCellsFromBase(x, y, sh);
+                                for (let dz = 0; dz < 5; dz++) {
+                                    const testCells = baseCells.map(c => ({ x: c.x, y: c.y, z: c.z + dz }));
+                                    if (testCells.some(c => c.z > 4)) break;
+                                    
+                                    if (logic.checkValidity(player, testCells).ok) {
+                                        moves.push({ type: 'place', cells: testCells, shapeIdx: sh });
+                                        break; // 중력 규칙: 해당 x,y,shape 조합에서는 가장 낮은 곳만 유효하다고 가정
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } 
+            // 2. 이동 단계 (Movement)
+            else if (logic.phase === 'MOVEMENT') {
+                // 내 블록들을 찾음
+                const myBlocks = logic.blocks.filter(b => b.player === player && !b.isFixed);
+                
+                for (const block of myBlocks) {
+                    // 이 블록을 들어올릴 수 있는지 확인 (위에 다른 블록이 없어야 함)
+                    if (!logic.canPick(block)) continue;
 
+                    // 가상으로 들어올림 (임시 제거)
+                    const tempLogic = logic.clone();
+                    tempLogic.removeBlock(block.id);
+                    tempLogic.selectedBlockOriginalCells = block.cells; // 제자리 금지 확인용
+
+                    // 들어올린 상태에서 모든 위치에 놓아봄
+                    for (let sh = 0; sh < 8; sh++) {
+                        for (let y = 0; y < 5; y++) {
+                            for (let x = 0; x < 5; x++) {
+                                let baseCells = getCellsFromBase(x, y, sh);
+                                for (let dz = 0; dz < 5; dz++) {
+                                    const testCells = baseCells.map(c => ({ x: c.x, y: c.y, z: c.z + dz }));
+                                    if (testCells.some(c => c.z > 4)) break;
+
+                                    // 이동 규칙(isMovement=true)으로 검사
+                                    if (tempLogic.checkValidity(player, testCells, true, block.cells).ok) {
+                                        moves.push({ type: 'move', fromId: block.id, cells: testCells, shapeIdx: sh });
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return moves;
+        }
         const ai = new MCTSAI(); // 이제 MCTS와 Neural이 통합됨
         const logic = new GameLogic();
         const logEl = document.getElementById('log-console');
