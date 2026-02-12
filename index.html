@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>대학전쟁: 블록 오목 (RL AI Ver.)</title>
+    <title>대학전쟁: 블록 오목 (MCTS & Multi-Undo)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body { margin: 0; overflow: hidden; background: #dfe4ea; font-family: 'Pretendard', sans-serif; user-select: none; -webkit-touch-callout: none; }
@@ -15,24 +15,18 @@
         .title-row { display: flex; align-items: center; gap: 8px; font-size: 1.1rem; }
         .score-box { font-weight: bold; font-size: 1rem; }
         .p1 { color: #e74c3c; } .p2 { color: #2ecc71; } 
+        
         .btn { background: #fff; border: 1px solid #ccc; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s; }
         .btn:active { transform: translateY(1px); background: #f0f0f0; }
         .btn-hint { background: #f1c40f; border-color: #f39c12; color: #fff; }
         .btn-ai-toggle { background: #ecf0f1; color: #7f8c8d; }
         .btn-ai-toggle.active { background: #2ecc71; color: white; border-color: #27ae60; }
+        
         .phase-badge { font-size: 0.75rem; color: white; padding: 4px 8px; border-radius: 4px; background: #333; vertical-align: middle; }
         
-        /* 회전 버튼 스타일 수정 (R키 안내 추가) */
-        .fab-rotate-container {
-            position: absolute; right: 20px; bottom: 30px;
-            display: flex; flex-direction: column; align-items: center;
-            pointer-events: auto;
-        }
-        .fab-rotate { 
-            width: 70px; height: 70px; background: #fff; color: #333; border-radius: 50%; border: 2px solid #ddd; 
-            display: flex; justify-content: center; align-items: center; font-size: 2.2rem; cursor: pointer; 
-            box-shadow: 0 6px 15px rgba(0,0,0,0.2); transition: transform 0.1s; 
-        }
+        /* 회전 버튼 & R키 안내 */
+        .fab-rotate-container { position: absolute; right: 20px; bottom: 30px; display: flex; flex-direction: column; align-items: center; pointer-events: auto; }
+        .fab-rotate { width: 70px; height: 70px; background: #fff; color: #333; border-radius: 50%; border: 2px solid #ddd; display: flex; justify-content: center; align-items: center; font-size: 2.2rem; cursor: pointer; box-shadow: 0 6px 15px rgba(0,0,0,0.2); transition: transform 0.1s; }
         .fab-rotate:active { transform: scale(0.95); background: #f9f9f9; }
         .key-hint { font-size: 0.7rem; color: #666; margin-top: 5px; font-weight: bold; text-shadow: 1px 1px 0 #fff; }
 
@@ -44,9 +38,11 @@
         .lobby-title { font-size: 2rem; font-weight: bold; margin-bottom: 30px; color: #2c3e50; }
         .lobby-btn { width: 100%; padding: 15px; margin: 10px 0; font-size: 1.1rem; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; color: white; transition: transform 0.1s; }
         .btn-single { background: #9b59b6; } .btn-create { background: #3498db; } .btn-join { background: #2ecc71; }
-        .lobby-input { width: 100%; padding: 12px; margin: 10px 0; font-size: 1.2rem; border: 2px solid #ddd; border-radius: 10px; box-sizing: border-box; text-align: center; letter-spacing: 2px; }
+        .lobby-input { width: 100%; padding: 12px; margin: 10px 0; font-size: 1.2rem; border: 2px solid #ddd; border-radius: 10px; box-sizing: border-box; text-align: center; letter-spacing: 2px; text-transform: uppercase; }
+        
         #ai-loader { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 15px 30px; border-radius: 30px; font-weight: bold; font-size: 1.2rem; z-index: 50; pointer-events: none; backdrop-filter: blur(5px); }
         #my-player-badge { font-size: 0.9rem; font-weight: bold; padding: 6px 12px; border-radius: 20px; display: inline-block; }
+        
         .modal-overlay { pointer-events: auto; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 300; }
         .modal-content { background: white; width: 85%; max-width: 500px; max-height: 85%; border-radius: 12px; padding: 25px; overflow-y: auto; position: relative; }
         .close-btn { position: absolute; top: 15px; right: 20px; font-size: 1.5rem; cursor: pointer; color: #888; }
@@ -58,7 +54,7 @@
 <body>
     <div id="lobby-overlay">
         <div class="lobby-box">
-            <div class="lobby-title">🎲 블록 오목 <span style="font-size:1rem; color:#e74c3c;">(RL Trained)</span></div>
+            <div class="lobby-title">🎲 블록 오목 <span style="font-size:1rem; color:#e74c3c;">(MCTS Beta)</span></div>
             
             <div id="lobby-main">
                 <button class="lobby-btn btn-single" onclick="showSideSelection()">👤 싱글 / AI 연습</button>
@@ -66,7 +62,7 @@
                 <div style="font-size:0.9rem; color:#666; margin-bottom:10px;">온라인 멀티플레이</div>
                 <button class="lobby-btn btn-create" onclick="createRoom()">방 만들기 (Host)</button>
                 <div style="margin: 10px 0; color: #888; font-size:0.8rem;">- 또는 -</div>
-                <input type="text" id="room-code-input" class="lobby-input" placeholder="코드 4자리 입력" maxlength="4">
+                <input type="text" id="room-code-input" class="lobby-input" placeholder="코드 6자리 (영문+숫자)" maxlength="6">
                 <button class="lobby-btn btn-join" onclick="joinRoom()">방 참가하기 (Join)</button>
             </div>
 
@@ -87,7 +83,7 @@
     </div>
 
     <div id="game-canvas"></div>
-    <div id="ai-loader">🧠 70만번 학습한 뇌 가동중...</div>
+    <div id="ai-loader">🤖 MCTS AI 생각중...</div>
 
     <div id="ui-layer" style="display:none;">
         <div class="top-bar">
@@ -96,7 +92,10 @@
                     <div class="title-row"> <span style="font-weight:bold;">BLOCK OMOK</span> <span id="game-phase" class="phase-badge">착수</span> </div>
                     <div class="score-box"> <span class="p1">흑: <span id="p1-cnt">4</span></span> <span style="margin:0 5px; color:#ccc">|</span> <span class="p2">백: <span id="p2-cnt">4</span></span> <span id="turn-indicator" style="font-size:0.9rem; margin-left:5px; color:#e74c3c;">(흑 차례)</span> </div>
                 </div>
-                <div class="btn-group"> <button class="btn" onclick="window.undo()">↩️ 무르기</button> <button class="btn" onclick="window.resetGame()">🔄 초기화</button> </div>
+                <div class="btn-group"> 
+                    <button class="btn" id="btn-undo" onclick="window.requestUndo()">↩️ 무르기</button> 
+                    <button class="btn" onclick="window.resetGame()">🔄 초기화</button> 
+                </div>
             </div>
             <div class="row-lower">
                 <div id="my-player-badge">싱글 모드</div>
@@ -121,12 +120,10 @@
         <div class="modal-content">
             <span class="close-btn" onclick="document.getElementById('rule-modal').style.display='none'">&times;</span>
             <h3>📜 게임 규칙 상세</h3>
-            
             <div class="rule-sec">
                 <div class="rule-head">1. 승리 조건</div>
                 <div class="rule-desc">위에서 내려다보았을 때(Top View), 자신의 색깔 블록 5개가 연속(가로, 세로, 대각선)되면 승리합니다.</div>
             </div>
-
             <div class="rule-sec">
                 <div class="rule-head">2. 착수 규칙</div>
                 <div class="rule-desc">
@@ -135,7 +132,6 @@
                     - <b>금지 구역:</b> 게임 시작 후 각자 2턴 동안은 귀퉁이에 착수할 수 없습니다.
                 </div>
             </div>
-
             <div class="rule-sec">
                 <div class="rule-head">3. 이동 단계</div>
                 <div class="rule-desc">
@@ -150,7 +146,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, set, onValue, update, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, set, onValue, update, get, child, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -174,58 +170,147 @@
         let isOnline = false;
 
         // =========================================================
-        // 🧠 REAL Neural Network AI (Using 700k Model)
+        // 🧠 MCTS AI (Monte Carlo Tree Search) Implementation
         // =========================================================
-        class NeuralAI {
-            constructor() { this.weights = null; this.ready = false; }
-            async load() {
-                try {
-                    const res = await fetch('./legendary_ai.json');
-                    if (!res.ok) throw new Error("File not found");
-                    this.weights = await res.json();
-                    this.ready = true;
-                    console.log("🧠 700k Trained Model Loaded");
-                } catch (e) {
-                    console.error("AI load failed:", e);
-                    log("⚠️ legendary_ai.json 파일을 찾을 수 없습니다.");
-                }
-            }
+        class MCTSAI {
+            constructor() { this.ready = true; }
             
-            // [중요] 시점 변환 (Perspective Swap) 포함
-            predict(board, player) {
-                if (!this.ready) return null;
-                
-                let input = [];
-                for (let z=0; z<5; z++) {
-                    for (let y=0; y<5; y++) {
-                        for (let x=0; x<5; x++) {
-                            let val = board[z][y][x];
-                            // AI가 2번 플레이어라면, 보드를 뒤집어서 "내가 1번인 척" 하고 판단함
-                            if (player === 2) { 
-                                if (val === 1) val = 2;
-                                else if (val === 2) val = 1;
-                            }
-                            input.push(val);
-                        }
+            // 시뮬레이션으로 수 결정
+            async getBestMove(logic, player, iterations = 600) {
+                const root = {
+                    state: logic.clone(),
+                    player: player,
+                    parent: null,
+                    children: [],
+                    visits: 0,
+                    wins: 0,
+                    move: null
+                };
+
+                const validMoves = getAllValidMoves(logic, player);
+                if (validMoves.length === 0) return null;
+
+                const start = Date.now();
+                // 1초 제한 또는 반복 횟수 제한
+                while (Date.now() - start < 1000 && iterations > 0) {
+                    let node = this.select(root);
+                    if (!node.state.winner && node.visits > 0) {
+                        node = this.expand(node);
+                    }
+                    const winner = this.simulate(node.state, node.player);
+                    this.backpropagate(node, winner);
+                    iterations--;
+                }
+
+                // 방문 수가 가장 많은 자식이 가장 좋은 수
+                let bestChild = null;
+                let maxVisits = -1;
+                for (const child of root.children) {
+                    if (child.visits > maxVisits) {
+                        maxVisits = child.visits;
+                        bestChild = child;
                     }
                 }
-
-                // Neural Net Forward Pass (512x512)
-                let h1 = this.matMul(input, this.weights.fc0_w, this.weights.fc0_b).map(x => Math.max(0, x)); // ReLU
-                let h2 = this.matMul(h1, this.weights.fc1_w, this.weights.fc1_b).map(x => Math.max(0, x)); // ReLU
-                let output = this.matMul(h2, this.weights.fc2_w, this.weights.fc2_b);
-                
-                return output; // 200 action scores
+                return bestChild ? bestChild.move : validMoves[0];
             }
 
-            matMul(input, W, b) {
-                let res = new Array(b.length).fill(0);
-                for (let i = 0; i < b.length; i++) {
-                    let sum = 0;
-                    for (let j = 0; j < input.length; j++) sum += input[j] * W[i][j];
-                    res[i] = sum + b[i];
+            select(node) {
+                while (node.children.length > 0) {
+                    // UCB1 알고리즘
+                    node = node.children.reduce((best, child) => {
+                        const ucb1 = (child.wins / (child.visits + 1e-6)) + 1.41 * Math.sqrt(Math.log(node.visits + 1) / (child.visits + 1e-6));
+                        const bestUcb1 = (best.wins / (best.visits + 1e-6)) + 1.41 * Math.sqrt(Math.log(node.visits + 1) / (best.visits + 1e-6));
+                        return ucb1 > bestUcb1 ? child : best;
+                    });
                 }
-                return res;
+                return node;
+            }
+
+            expand(node) {
+                const moves = getAllValidMoves(node.state, node.player);
+                for (const move of moves) {
+                    const newState = node.state.clone();
+                    if (move.type === 'place') {
+                        newState.addBlock(node.player, move.cells, move.shapeIdx);
+                        newState.blocksLeft[node.player]--;
+                    } else {
+                        // 이동 로직 시뮬레이션
+                        const b = newState.blocks.find(x => x.id === move.fromId);
+                        if (b) {
+                            newState.removeBlock(b.id);
+                            newState.addBlock(node.player, move.cells, move.shapeIdx);
+                        }
+                    }
+                    
+                    // 턴 넘기기 로직 (간소화)
+                    newState.winner = newState.checkWin();
+                    if (newState.winner === 0) {
+                        newState.currentPlayer = newState.currentPlayer === 1 ? 2 : 1;
+                        if (newState.blocksLeft[1]===0 && newState.blocksLeft[2]===0) newState.phase='MOVEMENT';
+                        else if (newState.blocksLeft[newState.currentPlayer]===0 && newState.phase==='PLACEMENT') newState.phase='MOVEMENT';
+                    }
+
+                    const childNode = {
+                        state: newState,
+                        player: newState.currentPlayer,
+                        parent: node,
+                        children: [],
+                        visits: 0,
+                        wins: 0,
+                        move: move
+                    };
+                    node.children.push(childNode);
+                }
+                // 자식이 없으면 자신 리턴
+                return node.children.length > 0 ? node.children[Math.floor(Math.random() * node.children.length)] : node;
+            }
+
+            simulate(state, player) {
+                let tempState = state.clone();
+                let depth = 0;
+                // 랜덤 플레이아웃 (최대 20수까지만)
+                while (tempState.winner === 0 && depth < 20) {
+                    const moves = getAllValidMoves(tempState, tempState.currentPlayer);
+                    if (moves.length === 0) break;
+                    const move = moves[Math.floor(Math.random() * moves.length)];
+                    
+                    if (move.type === 'place') {
+                        tempState.addBlock(tempState.currentPlayer, move.cells, move.shapeIdx);
+                        tempState.blocksLeft[tempState.currentPlayer]--;
+                    } else {
+                        const b = tempState.blocks.find(x => x.id === move.fromId);
+                        if (b) {
+                            tempState.removeBlock(b.id);
+                            tempState.addBlock(tempState.currentPlayer, move.cells, move.shapeIdx);
+                        }
+                    }
+                    
+                    tempState.winner = tempState.checkWin();
+                    if (tempState.winner === 0) {
+                        tempState.currentPlayer = tempState.currentPlayer === 1 ? 2 : 1;
+                        if (tempState.blocksLeft[1]===0 && tempState.blocksLeft[2]===0) tempState.phase='MOVEMENT';
+                        else if (tempState.blocksLeft[tempState.currentPlayer]===0 && tempState.phase==='PLACEMENT') tempState.phase='MOVEMENT';
+                    }
+                    depth++;
+                }
+                return tempState.winner;
+            }
+
+            backpropagate(node, winner) {
+                while (node) {
+                    node.visits++;
+                    // 해당 노드의 플레이어가 이겼는지 확인 (상대방 턴에서 내가 둔 수가 이득이었는지)
+                    // 단순화: 승리자가 있으면 해당 승리자의 모든 조상 노드에 승수 추가? 
+                    // MCTS 표준: 현재 노드 입장에서 승리했으면 wins++
+                    if (winner !== 0) {
+                        // node.parent가 null이면 루트.
+                        // node에 도달하기 위한 move를 둔 주체는 node.parent.player 임. (Turn 넘어가기 전)
+                        // 여기서는 간단히: 최종 승자가 node의 턴 플레이어와 다르면 승리 (즉, 직전 둔 사람이 이김)
+                        // 편의상: winner가 있으면 무조건 +1 하되, 비기면 0
+                        node.wins += (winner === (node.parent ? node.parent.player : 0) ? 1 : 0); 
+                    }
+                    node = node.parent;
+                }
             }
         }
 
@@ -235,12 +320,6 @@
             [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:1,y:0,z:1}], [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:-1,y:0,z:1}],
             [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:0,y:1,z:1}], [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:0,y:-1,z:1}]
         ];
-
-        function decodeAction(actionId) {
-            const shapeIdx = actionId % 8;
-            const posIdx = Math.floor(actionId / 8);
-            return { x: posIdx % 5, y: Math.floor(posIdx / 5), shapeIdx };
-        }
 
         class GameLogic {
             constructor() { this.reset(); }
@@ -369,64 +448,13 @@
             undo() { if(this.history.length===0) return false; const s = this.history.pop(); Object.assign(this, s); this.selectedBlock=null; this.selectedBlockOriginalCells=null; return true; }
         }
 
-        // =========================================================
-        // 🧠 Hybrid AI Search Logic (Fixing "No Move" Bug)
-        // =========================================================
-        async function getAIMove() {
-            if (!ai.ready) { log("AI 로딩중..."); return null; }
-            aiLoader.style.display = 'block';
-            await new Promise(r => setTimeout(r, 50)); // Render UI
-
-            // 1. Get Neural Net Scores
-            const scores = ai.predict(logic.board, logic.currentPlayer);
-            if (!scores) { aiLoader.style.display='none'; return null; }
-
-            // 2. Generate All Legal Moves (To match against scores)
-            const validMoves = getAllValidMoves(logic, logic.currentPlayer);
-            
-            if (validMoves.length === 0) { 
-                aiLoader.style.display='none'; 
-                return null; 
-            }
-
-            // 3. Find Best Move
-            let bestMove = null;
-            let maxScore = -Infinity;
-
-            for (let move of validMoves) {
-                // Map move to action index (0-199)
-                let actionIdx;
-                if (move.type === 'place') {
-                    // Place: cells are directly from SHAPES[s] + offset(x,y)
-                    // We need to recover the anchor (x,y) that generated this move.
-                    // Since we don't store anchor in 'move', we can infer or pass it.
-                    // Easier: Store x,y in 'move' inside getAllValidMoves.
-                    actionIdx = (move.y * 5 + move.x) * 8 + move.shapeIdx;
-                } else {
-                    // Move: target cells match the action
-                    actionIdx = (move.y * 5 + move.x) * 8 + move.shapeIdx;
-                }
-
-                const score = scores[actionIdx];
-                if (score > maxScore) { maxScore = score; bestMove = move; }
-            }
-
-            // Fallback (Rare safety net)
-            if (!bestMove) bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
-
-            aiLoader.style.display = 'none';
-            return bestMove;
-        }
-
+        // --- AI Helper ---
         function getAllValidMoves(g, p) {
             const moves = [];
             if (g.blocksLeft[p] > 0) {
                 for (let x=0; x<5; x++) for (let y=0; y<5; y++) for (let s=0; s<8; s++) {
                     const sh = SHAPES[s]; const cells = sh.map(d => ({x:x+d.x, y:y+d.y, z:d.z}));
-                    if (g.checkValidity(p, cells).ok) {
-                        // Store x,y for AI indexing
-                        moves.push({ type:'place', cells, shapeIdx: s, x, y });
-                    }
+                    if (g.checkValidity(p, cells).ok) moves.push({ type:'place', cells, shapeIdx: s });
                 }
             } else {
                 const myBlocks = g.blocks.filter(b => b.player === p && !b.isFixed);
@@ -437,7 +465,7 @@
                     for (let x=0; x<5; x++) for (let y=0; y<5; y++) for (let s=0; s<8; s++) {
                         const sh = SHAPES[s]; const cells = sh.map(d => ({x:x+d.x, y:y+d.y, z:d.z}));
                         if (g.checkValidity(p, cells, true, orig).ok) {
-                            moves.push({ type:'move', fromId:b.id, cells, shapeIdx: s, x, y });
+                            moves.push({ type:'move', fromId:b.id, cells, shapeIdx: s });
                         }
                     }
                     g.addBlock(p, orig, b.shapeIdx, false);
@@ -447,7 +475,10 @@
             return moves;
         }
 
-        const ai = new NeuralAI(); ai.load();
+        // ==========================================
+        // Main Setup
+        // ==========================================
+        const ai = new MCTSAI(); // Using MCTS instead of Neural
         const logic = new GameLogic();
         const logEl = document.getElementById('log-console');
         const aiLoader = document.getElementById('ai-loader');
@@ -458,6 +489,7 @@
             if(logEl.children.length > 4) logEl.removeChild(logEl.lastChild);
         }
 
+        // Three.js Setup
         const scene = new THREE.Scene(); scene.background = new THREE.Color(0xdfe4ea);
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
         camera.position.set(0, 14, 12); camera.lookAt(0,0,0);
@@ -489,9 +521,20 @@
             document.getElementById('turn-indicator').style.color = logic.currentPlayer===1?"#e74c3c":"#2ecc71";
             document.getElementById('game-phase').innerText = logic.phase==='MOVEMENT'?"이동":"착수";
             document.getElementById('game-phase').style.background = logic.phase==='MOVEMENT'?"#e67e22":"#333";
+            
             const btn = document.getElementById('btn-ai-toggle');
             btn.innerText = logic.aiMode ? "🤖 AI 대전: ON" : "🤖 AI 대전: OFF";
             logic.aiMode ? btn.classList.add('active') : btn.classList.remove('active');
+
+            // 멀티플레이어면 무르기 버튼에 "요청" 기능 할당, 아니면 로컬 무르기
+            const btnUndo = document.getElementById('btn-undo');
+            if (isOnline) {
+                btnUndo.innerText = "↩️ 무르기 요청";
+                btnUndo.onclick = window.requestUndo;
+            } else {
+                btnUndo.innerText = "↩️ 무르기";
+                btnUndo.onclick = window.undo;
+            }
         }
 
         function renderBoard() {
@@ -564,26 +607,34 @@
             }
         };
 
+        // [보안 강화] 영문+숫자 6자리 코드 생성
         window.createRoom = () => {
-            const code = Math.floor(1000 + Math.random() * 9000).toString();
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let code = '';
+            for(let i=0; i<6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+            
             myRoomId = code; myPlayerNum = 1; 
-            set(ref(db, 'rooms/' + code), { status: 'waiting', board: logic.serialize() });
+            set(ref(db, 'rooms/' + code), { status: 'waiting', board: logic.serialize(), undoReq: null });
+            
             document.getElementById('lobby-main').style.display = 'none';
             document.getElementById('lobby-wait').style.display = 'block';
             document.getElementById('display-room-code').innerText = code;
+            
             onValue(ref(db, 'rooms/' + code + '/status'), (snap) => {
                 if (snap.val() === 'playing') startGameMulti(1);
             });
         };
 
         window.joinRoom = () => {
-            const code = document.getElementById('room-code-input').value;
+            const code = document.getElementById('room-code-input').value.toUpperCase(); // 대문자 변환
+            if(code.length !== 6) { alert("코드 6자리를 입력해주세요."); return; }
+            
             get(child(ref(db), 'rooms/' + code)).then((snap) => {
                 if (snap.exists()) {
                     myRoomId = code; myPlayerNum = 2; 
                     update(ref(db, 'rooms/' + code), { status: 'playing' });
                     startGameMulti(2);
-                } else alert("방 없음");
+                } else alert("방을 찾을 수 없습니다.");
             });
         };
 
@@ -595,6 +646,8 @@
             const badge = document.getElementById('my-player-badge');
             badge.innerText = pNum===1 ? "🌐 Host (흑)" : "🌐 Guest (백)";
             badge.style.background = pNum===1 ? "#e74c3c" : "#2ecc71";
+            
+            // 보드 상태 리스너
             onValue(ref(db, 'rooms/' + myRoomId + '/board'), (snap) => {
                 if (snap.val()) {
                     logic.deserialize(snap.val());
@@ -602,6 +655,40 @@
                     setTimeout(() => { if(logic.winner!==0) alert(`게임 종료! Player ${logic.winner} 승리!`); }, 200);
                 }
             });
+
+            // [NEW] 무르기 요청 리스너
+            onValue(ref(db, 'rooms/' + myRoomId + '/undoReq'), (snap) => {
+                const req = snap.val();
+                if (req && req.requester !== myPlayerNum) {
+                    if (confirm("상대방이 '무르기'를 요청했습니다. 수락하시겠습니까?")) {
+                        // 수락: 상태 되돌리기 로직 (서버 데이터 업데이트)
+                        // 주의: 실제로는 logic.undo()를 두 번 호출해야 내 차례가 됨 (나 한번, 상대 한번)
+                        // 하지만 여기서는 그냥 logic.history에서 pop해서 상태를 덮어씌움
+                        // 동기화 문제 방지를 위해, Host가 처리하거나 요청받은 사람이 처리
+                        // 여기서는 요청받은 사람이 처리해서 DB에 쏨
+                        logic.undo(); // 상대 수 무르기
+                        logic.undo(); // 내 수 무르기 (내 차례로 돌아옴)
+                        // DB 업데이트
+                        set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize());
+                        // 요청 초기화
+                        set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null);
+                        alert("무르기를 수락했습니다.");
+                    } else {
+                        // 거절: 요청만 초기화
+                        set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null);
+                        alert("무르기를 거절했습니다.");
+                    }
+                }
+            });
+        }
+
+        // [NEW] 무르기 요청 발송
+        window.requestUndo = () => {
+            if (!isOnline) return;
+            if (confirm("상대방에게 무르기를 요청하시겠습니까?")) {
+                set(ref(db, 'rooms/' + myRoomId + '/undoReq'), { requester: myPlayerNum });
+                log("무르기 요청을 보냈습니다...");
+            }
         }
 
         function sendMove() {
@@ -610,7 +697,7 @@
 
         window.askAI = async () => {
             if(logic.winner!==0) return;
-            const move = await getAIMove();
+            const move = await ai.getBestMove(logic, logic.currentPlayer); // MCTS 사용
             if(move) {
                 while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]);
                 if(move.type==='move') {
@@ -623,7 +710,7 @@
         };
 
         async function runAI() {
-            const move = await getAIMove();
+            const move = await ai.getBestMove(logic, logic.currentPlayer); // MCTS 사용
             if(move) {
                 if(move.type==='place') logic.confirmMove(move.cells, move.shapeIdx);
                 else {
@@ -648,7 +735,6 @@
         window.undo = () => { if(!isOnline && logic.undo()) { log("무르기"); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); } };
         window.resetGame = () => { if(!isOnline && confirm("초기화?")) { logic.reset(); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); log("초기화됨"); } };
         
-        // Key Fix: R키 중복 입력 방지
         document.onkeydown = (e) => {
             if(e.code==='KeyR') { currentShapeIdx++; updateGhost(); }
             if(e.code==='KeyZ') window.undo();
@@ -657,7 +743,6 @@
         document.getElementById('btn-rotate').addEventListener('click', e=>{ e.stopPropagation(); currentShapeIdx++; updateGhost(); });
         window.addEventListener('resize', () => { camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
         
-        // Mouse Logic
         const ray = new THREE.Raycaster(); const mouse = new THREE.Vector2(); let downTime=0;
         window.addEventListener('mousemove', e=>{
             mouse.x=(e.clientX/window.innerWidth)*2-1; mouse.y=-(e.clientY/window.innerHeight)*2+1;
