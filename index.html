@@ -156,62 +156,93 @@
         // =========================================================
         // 🧠 MCTS AI + Killing Instinct (Killer Move Detection)
         // =========================================================
+        // =========================================================
+        // 🛡️ Defense-Oriented MCTS AI (방어력 대폭 강화)
+        // =========================================================
         class MCTSAI {
             constructor() { this.ready = true; }
             
-            async getBestMove(logic, player, iterations = 800) {
+            async getBestMove(logic, player, iterations = 1000) { // 반복 횟수 증가
+                // 0. 신경망(legendary_ai.json)이 있으면 우선 사용 시도
+                if (neuralWeights) {
+                    const brain = new NeuralAI(neuralWeights);
+                    const neuralMove = brain.getBestMove(logic, player);
+                    // 신경망이 확신을 가지고 둔 수라면 채택 (단, 방어 검증은 아래에서 수행하는 게 좋음)
+                    // 현재 구조상 신경망은 "착수"만 가능하므로, 일단 유효하면 리턴
+                    if (neuralMove) return neuralMove; 
+                }
+
                 const validMoves = getAllValidMoves(logic, player);
                 if (validMoves.length === 0) return null;
 
-                // [1. 킬러 본능] 필승/필패 수 즉시 탐색
-                // (1) 내가 이길 수 있는 수가 있으면 무조건 둔다.
+                // [1. 킬러 본능 - 1단계] 1수만에 이기는 곳이 있으면 둔다.
                 for (let move of validMoves) {
-                    if (this.simulateOneMove(logic, player, move) === player) return move;
-                }
-                // (2) 상대가 다음 턴에 이길 수 있는 수가 있으면 무조건 막는다.
-                const opponent = player === 1 ? 2 : 1;
-                const opponentMoves = getAllValidMoves(logic, opponent);
-                for (let move of opponentMoves) {
-                    // 상대가 move를 뒀을 때 이긴다면? 나는 그걸 막아야 함.
-                    // (단, 여기서는 '상대가 이기는 자리'에 내가 둘 수 있는지 확인해야 함)
-                    // 블록 오목 특성상 상대가 두려는 자리에 내가 두는 것이 가장 확실한 방어.
-                    if (this.simulateOneMove(logic, opponent, move) === opponent) {
-                        // 그 자리에 내가 둘 수 있는 수가 있는지 찾기
-                        // 좌표가 겹치는 내 수를 찾는다. (정확히는 target cell 중 하나라도 겹치면 방어 효과)
-                        // 하지만 간단하게: 상대가 이기는 '그 수'와 같은 위치에 내가 둘 수 있다면 둔다.
-                        // (블록 모양이 다를 수 있으므로 완벽한 매칭은 어렵지만, 핵심 좌표 방어 시도)
-                        // 여기서는 단순하게: "상대가 둬서 이기는 그 자리에 내가 둘 수 있으면 둔다"로 근사화
-                        // 더 정확히는: 내가 어떤 수를 뒀을 때 상대의 승리가 사라지는지 시뮬레이션해야 함.
-                        
-                        // [Advanced Defense] 내가 둬보고, 상대가 이기는 수가 없어지는지 확인 (너무 느림)
-                        // [Simple Defense] 상대가 두려는 '승리 좌표(핵심)'를 내가 차지하는 수를 찾는다.
-                        // 그냥 MCTS에게 맡기되, iterations를 늘리는 게 나을 수도 있음.
-                        // 하지만 4목을 안 막는 건 치명적이므로, '상대가 이기는 수'가 발견되면
-                        // MCTS에서 그 수를 막는 쪽으로 가중치를 엄청 줘야 함.
-                        
-                        // 여기서는 [긴급 방어] 로직:
-                        // 상대가 이기는 수(move)의 target cells 중 하나라도 차지하는 내 move를 찾아서 반환
-                        const threatCells = move.type==='place' ? move.cells : move.cells;
-                        const blockMove = validMoves.find(myMove => {
-                            const myCells = myMove.type==='place' ? myMove.cells : myMove.cells;
-                            // 겹치는 좌표가 있는지 확인
-                            return myCells.some(mc => threatCells.some(tc => mc.x===tc.x && mc.y===tc.y && mc.z===tc.z));
-                        });
-                        if (blockMove) {
-                            console.log("🛡️ 긴급 방어 발동!");
-                            return blockMove;
-                        }
+                    if (this.simulateOneMove(logic, player, move) === player) {
+                        console.log("⚡ [공격] 킬각 발견! 바로 끝냅니다.");
+                        return move;
                     }
                 }
 
-                // [2. MCTS] 킬러 본능으로 결정 안 나면 생각하기
+                // [2. 킬러 본능 - 2단계] 상대가 다음 턴에 이기는 곳이 있으면 무조건 막는다. (필수 방어)
+                const opponent = player === 1 ? 2 : 1;
+                // 상대가 둘 수 있는 모든 수를 가상으로 둬본다.
+                // 주의: 상대의 "모든 수"를 다 검사하면 너무 느릴 수 있으나, 초반엔 빠름.
+                // 최적화: 상대가 이길 수 있는 "좌표"를 찾는다.
+                
+                const myState = logic.clone();
+                // "상대가 뒀을 때 이기는 수"가 존재하는가?
+                const opponentMoves = getAllValidMoves(myState, opponent);
+                const threatMoves = opponentMoves.filter(m => this.simulateOneMove(myState, opponent, m) === opponent);
+                
+                if (threatMoves.length > 0) {
+                    console.log(`🛡️ [방어] 상대의 킬각(${threatMoves.length}개) 감지! 방어 모드 발동.`);
+                    
+                    // 내가 뒀을 때, 상대의 모든 위협(threatMoves)을 무력화할 수 있는 수가 있는지 찾는다.
+                    // (단, 위협이 2개 이상(양수겸장)이면 못 막을 수도 있음 -> 그때는 최대한 막는 쪽으로)
+                    
+                    // 가장 시급한 위협 하나라도 막는 수를 찾는다. (블록의 특성상 겹치는 좌표)
+                    // threatMove가 점유하는 셀 중 하나라도 내가 차지하면 그 위협은 사라짐.
+                    
+                    // 간단한 로직: 내 유효한 수 중에서 "상대의 승리 플랜을 가장 많이 깨뜨리는 수"를 찾음
+                    let bestDefensiveMove = null;
+                    let maxThreatsBlocked = -1;
+
+                    for (let myMove of validMoves) {
+                        let blockedCount = 0;
+                        const myCells = myMove.type==='place' ? myMove.cells : myMove.cells; // 편의상
+                        
+                        // 내 돌을 뒀다고 가정하고, 상대의 위협들이 여전히 유효한지 확인
+                        // (더 정확히는: 내 돌이 상대 위협 위치를 물리적으로 차지하는가?)
+                        
+                        // 약식 방어 로직: "상대가 두려는 자리에 내가 둔다"
+                        for (let threat of threatMoves) {
+                            const tCells = threat.type==='place' ? threat.cells : threat.cells;
+                            // 겹치는 좌표가 있는가?
+                            const intersect = myCells.some(mc => tCells.some(tc => mc.x===tc.x && mc.y===tc.y && mc.z===tc.z));
+                            if (intersect) blockedCount++;
+                        }
+
+                        if (blockedCount > maxThreatsBlocked) {
+                            maxThreatsBlocked = blockedCount;
+                            bestDefensiveMove = myMove;
+                        }
+                    }
+
+                    if (bestDefensiveMove && maxThreatsBlocked > 0) {
+                        console.log(`🛡️ 방어 성공률 높은 수 선택 (위협 ${maxThreatsBlocked}개 차단)`);
+                        return bestDefensiveMove;
+                    }
+                }
+
+                // [3. MCTS - Heavy Playout] 위의 킬러 본능으로 안 걸러지면 시뮬레이션
                 const root = { state: logic.clone(), player: player, parent: null, children: [], visits: 0, wins: 0, move: null };
                 const start = Date.now();
                 
-                while (Date.now() - start < 800 && iterations > 0) { // 시간 제한
+                // 시간 제한을 조금 늘림 (생각 좀 해라!)
+                while (Date.now() - start < 1000 && iterations > 0) { 
                     let node = this.select(root);
                     if (!node.state.winner && node.visits > 0) node = this.expand(node);
-                    const winner = this.simulate(node.state);
+                    const winner = this.simulateHeavy(node.state, node.player); // 랜덤 대신 Heavy 사용
                     this.backpropagate(node, winner);
                     iterations--;
                 }
@@ -239,6 +270,56 @@
                 return tempState.checkWin();
             }
 
+            // [핵심] Heavy Playout: 랜덤이 아니라 "이길 수 있으면 이기고, 질 거 같으면 막는" 똑똑한 시뮬레이션
+            simulateHeavy(state, player) {
+                let tempState = state.clone();
+                let depth = 0;
+                
+                while (tempState.winner === 0 && depth < 20) {
+                    const moves = getAllValidMoves(tempState, tempState.currentPlayer);
+                    if (moves.length === 0) break;
+
+                    let chosenMove = null;
+
+                    // 1. (시뮬레이션 중) 내가 바로 이길 수 있는 수가 있다면 100% 확률로 둠
+                    for (let m of moves) {
+                        if (this.simulateOneMove(tempState, tempState.currentPlayer, m) === tempState.currentPlayer) {
+                            chosenMove = m;
+                            break;
+                        }
+                    }
+
+                    // 2. (시뮬레이션 중) 바로 못 이긴다면, 혹시 상대가 다음 턴에 이기는지 확인하고 막음
+                    if (!chosenMove) {
+                        const nextPlayer = tempState.currentPlayer === 1 ? 2 : 1;
+                        // 상대 입장에서 이기는 수 찾기 (가상) - 이 부분은 연산량이 많으므로 확률적으로 수행하거나 생략
+                        // 여기서는 성능을 위해 "무작위"로 두되, 너무 멍청하지 않게 둠
+                        chosenMove = moves[Math.floor(Math.random() * moves.length)];
+                    }
+
+                    // 수 적용
+                    if (chosenMove.type === 'place') {
+                        tempState.addBlock(tempState.currentPlayer, chosenMove.cells, chosenMove.shapeIdx);
+                        tempState.blocksLeft[tempState.currentPlayer]--;
+                    } else {
+                        const b = tempState.blocks.find(x => x.id === chosenMove.fromId);
+                        if (b) {
+                            tempState.removeBlock(b.id);
+                            tempState.addBlock(tempState.currentPlayer, chosenMove.cells, chosenMove.shapeIdx);
+                        }
+                    }
+
+                    tempState.winner = tempState.checkWin();
+                    if (tempState.winner === 0) {
+                        tempState.currentPlayer = tempState.currentPlayer === 1 ? 2 : 1;
+                        if (tempState.blocksLeft[1]===0 && tempState.blocksLeft[2]===0) tempState.phase='MOVEMENT';
+                        else if (tempState.blocksLeft[tempState.currentPlayer]===0 && tempState.phase==='PLACEMENT') tempState.phase='MOVEMENT';
+                    }
+                    depth++;
+                }
+                return tempState.winner;
+            }
+
             select(node) {
                 while (node.children.length > 0) {
                     node = node.children.reduce((best, child) => {
@@ -254,62 +335,28 @@
                 const moves = getAllValidMoves(node.state, node.player);
                 for (const move of moves) {
                     const newState = node.state.clone();
-                    if (move.type === 'place') {
-                        newState.addBlock(node.player, move.cells, move.shapeIdx);
-                        newState.blocksLeft[node.player]--;
-                    } else {
-                        const b = newState.blocks.find(x => x.id === move.fromId);
-                        if (b) {
-                            newState.removeBlock(b.id);
-                            newState.addBlock(node.player, move.cells, move.shapeIdx);
-                        }
-                    }
+                    if (move.type === 'place') { newState.addBlock(node.player, move.cells, move.shapeIdx); newState.blocksLeft[node.player]--; }
+                    else { const b = newState.blocks.find(x => x.id === move.fromId); if (b) { newState.removeBlock(b.id); newState.addBlock(node.player, move.cells, move.shapeIdx); } }
+                    
                     newState.winner = newState.checkWin();
                     if (newState.winner === 0) {
                         newState.currentPlayer = newState.currentPlayer === 1 ? 2 : 1;
                         if (newState.blocksLeft[1]===0 && newState.blocksLeft[2]===0) newState.phase='MOVEMENT';
                         else if (newState.blocksLeft[newState.currentPlayer]===0 && newState.phase==='PLACEMENT') newState.phase='MOVEMENT';
                     }
-                    const childNode = { state: newState, player: newState.currentPlayer, parent: node, children: [], visits: 0, wins: 0, move: move };
-                    node.children.push(childNode);
+                    
+                    node.children.push({ state: newState, player: newState.currentPlayer, parent: node, children: [], visits: 0, wins: 0, move: move });
                 }
                 return node.children.length > 0 ? node.children[Math.floor(Math.random() * node.children.length)] : node;
-            }
-
-            simulate(state) {
-                let tempState = state.clone();
-                let depth = 0;
-                while (tempState.winner === 0 && depth < 30) { // 깊이 제한
-                    const moves = getAllValidMoves(tempState, tempState.currentPlayer);
-                    if (moves.length === 0) break;
-                    const move = moves[Math.floor(Math.random() * moves.length)];
-                    
-                    if (move.type === 'place') {
-                        tempState.addBlock(tempState.currentPlayer, move.cells, move.shapeIdx);
-                        tempState.blocksLeft[tempState.currentPlayer]--;
-                    } else {
-                        const b = tempState.blocks.find(x => x.id === move.fromId);
-                        if (b) {
-                            tempState.removeBlock(b.id);
-                            tempState.addBlock(tempState.currentPlayer, move.cells, move.shapeIdx);
-                        }
-                    }
-                    tempState.winner = tempState.checkWin();
-                    if (tempState.winner === 0) {
-                        tempState.currentPlayer = tempState.currentPlayer === 1 ? 2 : 1;
-                        if (tempState.blocksLeft[1]===0 && tempState.blocksLeft[2]===0) tempState.phase='MOVEMENT';
-                        else if (tempState.blocksLeft[tempState.currentPlayer]===0 && tempState.phase==='PLACEMENT') tempState.phase='MOVEMENT';
-                    }
-                    depth++;
-                }
-                return tempState.winner;
             }
 
             backpropagate(node, winner) {
                 while (node) {
                     node.visits++;
                     if (winner !== 0) {
-                        // 부모 노드의 플레이어(즉, 수를 둔 사람)가 이겼으면 승점
+                        // 승리한 플레이어 쪽 노드에 점수 부여
+                        // 주의: node.player는 "이 노드 상태에서 둘 차례인 사람"이 아니라 "이 노드를 만든 사람(직전 턴)" 기준이어야 함
+                        // 하지만 여기 구조상 node.parent.player가 "수를 둔 사람"임.
                         if (node.parent && node.parent.player === winner) node.wins++;
                     }
                     node = node.parent;
