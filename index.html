@@ -21,8 +21,21 @@
         .btn-ai-toggle { background: #ecf0f1; color: #7f8c8d; }
         .btn-ai-toggle.active { background: #2ecc71; color: white; border-color: #27ae60; }
         .phase-badge { font-size: 0.75rem; color: white; padding: 4px 8px; border-radius: 4px; background: #333; vertical-align: middle; }
-        .fab-rotate { pointer-events: auto; position: absolute; right: 20px; bottom: 30px; width: 70px; height: 70px; background: #fff; color: #333; border-radius: 50%; border: 2px solid #ddd; display: flex; justify-content: center; align-items: center; font-size: 2.2rem; cursor: pointer; box-shadow: 0 6px 15px rgba(0,0,0,0.2); transition: transform 0.1s; }
+        
+        /* 회전 버튼 스타일 수정 (R키 안내 추가) */
+        .fab-rotate-container {
+            position: absolute; right: 20px; bottom: 30px;
+            display: flex; flex-direction: column; align-items: center;
+            pointer-events: auto;
+        }
+        .fab-rotate { 
+            width: 70px; height: 70px; background: #fff; color: #333; border-radius: 50%; border: 2px solid #ddd; 
+            display: flex; justify-content: center; align-items: center; font-size: 2.2rem; cursor: pointer; 
+            box-shadow: 0 6px 15px rgba(0,0,0,0.2); transition: transform 0.1s; 
+        }
         .fab-rotate:active { transform: scale(0.95); background: #f9f9f9; }
+        .key-hint { font-size: 0.7rem; color: #666; margin-top: 5px; font-weight: bold; text-shadow: 1px 1px 0 #fff; }
+
         .fab-rules { pointer-events: auto; position: absolute; left: 20px; bottom: 30px; width: 45px; height: 45px; background: #3498db; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         .log-panel { pointer-events: none; position: absolute; left: 20px; bottom: 85px; background: rgba(0,0,0,0.6); color: #fff; width: 250px; height: 120px; border-radius: 8px; padding: 10px; overflow: hidden; font-family: monospace; font-size: 0.8rem; display: flex; flex-direction: column-reverse; text-shadow: 1px 1px 2px black; }
         
@@ -91,18 +104,47 @@
                 <button class="btn btn-hint" onclick="window.askAI()">💡 힌트</button>
             </div>
         </div>
-        <div class="log-panel" id="log-console"><div>🚀 게임 시작!</div></div>
-        <div class="fab-rotate" id="btn-rotate">↻</div>
+        <div class="log-panel" id="log-console">
+            <div>👆 클릭하여 착수/선택</div>
+            <div>🚀 게임 시작!</div>
+        </div>
+        
+        <div class="fab-rotate-container">
+            <div class="fab-rotate" id="btn-rotate">↻</div>
+            <div class="key-hint">(PC: R키)</div>
+        </div>
+        
         <div class="fab-rules" onclick="document.getElementById('rule-modal').style.display='flex'">?</div>
     </div>
 
     <div id="rule-modal" class="modal-overlay" onclick="if(event.target===this) this.style.display='none'">
         <div class="modal-content">
             <span class="close-btn" onclick="document.getElementById('rule-modal').style.display='none'">&times;</span>
-            <h3>📜 게임 규칙</h3>
-            <div class="rule-sec"><div class="rule-head">1. 승리 조건</div><div class="rule-desc">자신의 색깔 블록 5개가 연속(가로, 세로, 대각선)되면 승리합니다.</div></div>
-            <div class="rule-sec"><div class="rule-head">2. 착수 규칙</div><div class="rule-desc">- <b>접지:</b> 3칸(눕힘) 또는 1칸(세움)이 바닥에 닿아야 합니다.<br>- <b>지지:</b> 2층 이상은 바로 아래에 블록이 있어야 합니다.<br>- <b>금지:</b> 시작 후 각자 2턴간은 귀퉁이에 둘 수 없습니다.</div></div>
-            <div class="rule-sec"><div class="rule-head">3. 이동 단계</div><div class="rule-desc">- 블록 4개를 모두 쓰면 이동 단계가 됩니다.<br>- 자신의 블록을 들어서 다른 곳으로 옮겨야 합니다.<br>- 위에 다른 블록이 얹혀있는 블록은 뺄 수 없습니다.</div></div>
+            <h3>📜 게임 규칙 상세</h3>
+            
+            <div class="rule-sec">
+                <div class="rule-head">1. 승리 조건</div>
+                <div class="rule-desc">위에서 내려다보았을 때(Top View), 자신의 색깔 블록 5개가 연속(가로, 세로, 대각선)되면 승리합니다.</div>
+            </div>
+
+            <div class="rule-sec">
+                <div class="rule-head">2. 착수 규칙</div>
+                <div class="rule-desc">
+                    - <b>접지:</b> 3칸(눕힘) 또는 1칸(세움)이 반드시 바닥(1층)에 닿아야 합니다.<br>
+                    - <b>지지:</b> 2층 이상으로 올라가는 부분은 바로 아래에 다른 블록이 있어야 합니다.<br>
+                    - <b>금지 구역:</b> 게임 시작 후 각자 2턴 동안은 귀퉁이에 착수할 수 없습니다.
+                </div>
+            </div>
+
+            <div class="rule-sec">
+                <div class="rule-head">3. 이동 단계</div>
+                <div class="rule-desc">
+                    - 4개의 블록을 모두 사용하면 <b>이동 단계</b>가 됩니다.<br>
+                    - 자신의 블록을 클릭해 들어올린 후 다른 곳으로 옮겨야 합니다.<br>
+                    - <b>위에 다른 블록이 얹혀있는 블록</b>은 뺄 수 없습니다.<br>
+                    - 제자리로 다시 놓을 수 없습니다.
+                </div>
+            </div>
         </div>
     </div>
 
