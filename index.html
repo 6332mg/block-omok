@@ -888,7 +888,20 @@
 
         window.askAI = async () => {
             if(logic.winner!==0) return;
+            
+            // 1. 문구 띄우기
+            const loader = document.getElementById('ai-loader');
+            loader.innerText = "💡 힌트 찾는 중...";
+            loader.style.display = 'block';
+            
+            await new Promise(r => setTimeout(r, 10));
+
+            // 2. AI 생각
             const move = await ai.getBestMove(logic, logic.currentPlayer);
+            
+            // 3. 문구 숨기기
+            loader.style.display = 'none';
+
             if(move) {
                 while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]);
                 if(move.type==='move') {
@@ -899,9 +912,21 @@
                 drawGhost(move.cells, 0xf1c40f, hintGroup, 0.8);
             } else log("AI: 둘 곳이 없어요.");
         };
-
         async function runAI() {
+            // 1. 문구 띄우기
+            const loader = document.getElementById('ai-loader');
+            loader.innerText = "🤖 AI 고민 중..."; // 멘트 변경 가능
+            loader.style.display = 'block';
+            
+            // 화면이 그려질 틈을 아주 살짝 줌 (10ms)
+            await new Promise(r => setTimeout(r, 10));
+
+            // 2. AI 생각 (오래 걸림)
             const move = await ai.getBestMove(logic, logic.currentPlayer);
+            
+            // 3. 문구 숨기기
+            loader.style.display = 'none';
+
             if(move) {
                 if(move.type==='place') logic.confirmMove(move.cells, move.shapeIdx);
                 else {
@@ -918,7 +943,6 @@
                 log("AI 기권 (둘 곳 없음)");
             }
         }
-
         window.toggleAIMode = () => {
             logic.aiMode = !logic.aiMode; updateUI();
             if(!isOnline && logic.aiMode && logic.currentPlayer !== myPlayerNum) runAI();
