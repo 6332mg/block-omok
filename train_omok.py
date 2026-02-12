@@ -4,124 +4,58 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 import torch
+import torch.nn as nn
+import time
 
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 
 # ============================================================================
-# ⚡ [Speed Up] 연산 최적화된 스파르타 환경 (로컬 PC용)
+# 🧠 [Core] 3D CNN 신경망 (공간을 입체적으로 보는 눈)
+# ============================================================================
+class Omok3D_CNN(BaseFeaturesExtractor):
+    def __init__(self, observation_space: spaces.Box, features_dim: int = 256):
+        super(Omok3D_CNN, self).__init__(observation_space, features_dim)
+        
+        # 입력 채널: 2 (내 돌, 상대 돌)
+        # MX450 성능 고려: 채널 수를 32 -> 64로 적당히 조절 (너무 크면 VRAM 터짐)
+        self.cnn = nn.Sequential(
+            # Layer 1: 입체적 특징 추출
+            nn.Conv3d(in_channels=2, out_channels=32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            # Layer 2: 좀 더 복잡한 패턴 인식
+            nn.Conv3d(in_channels=32, out_channels=64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            # Flatten: 결정(Action)을 내리기 위해 1줄로 폄
+            nn.Flatten(),
+        )
+
+        # CNN 출력 크기 계산: 64채널 * 5 * 5 * 5 = 8000
+        with torch.no_grad():
+            n_flatten = self.cnn(torch.as_tensor(observation_space.sample()[None]).float()).shape[1]
+
+        self.linear = nn.Sequential(
+            nn.Linear(n_flatten, features_dim),
+            nn.ReLU()
+        )
+
+    def forward(self, observations: torch.Tensor) -> torch.Tensor:
+        return self.linear(self.cnn(observations))
+
+# ============================================================================
+# 🏟️ [Env] 스파르타 오목 환경 (3D CNN 호환 + 하이브리드 봇)
 # ============================================================================
 class SpartaOmokEnv(gym.Env):
-    # ⚡ [MCTS 탑재] 스마트 봇 (이제 수읽기를 합니다!)
-    def _smart_bot_turn(self):
-        legal_moves = self._get_legal_moves_indices(self.opponent)
-        if not legal_moves: return
-
-        # 1. 킬각 (계산 0초컷이므로 유지)
-        for action in legal_moves:
-            if self._simulate_move_fast(self.opponent, action):
-                self._execute_move(self.opponent, action)
-                return
-
-        # 2. 방어 (계산 0초컷이므로 유지)
-        opp_moves = self._get_legal_moves_indices(self.learner)
-        threats = []
-        for action in opp_moves:
-             if self._simulate_move_fast(self.learner, action):
-                threats.append(action)
-        for threat in threats:
-            if threat in legal_moves:
-                self._execute_move(self.opponent, threat)
-                return
-
-        # 3. 🔥 MCTS (몬테카를로 탐색)
-        # 여기서 시간을 씁니다. n_simulations가 높을수록 똑똑하지만 느려집니다.
-        # 로컬 PC(i5) 성능을 고려해 30번만 수읽기 합니다. (웹사이트는 1500번 함)
-        best_action = self._run_mcts_simulation(legal_moves, simulations_per_move=3, max_depth=5)
-        self._execute_move(self.opponent, best_action)
-
-    # 🧠 MCTS 시뮬레이션 엔진
-    def _run_mcts_simulation(self, candidates, simulations_per_move=3, max_depth=5):
-        best_score = -9999
-        best_move = random.choice(candidates) # 기본값
-
-        # 모든 후보 수에 대해 가상으로 둬봅니다.
-        for move in candidates:
-            wins = 0
-            
-            # 각 후보마다 N번씩 랜덤 게임을 끝까지(혹은 depth까지) 둬봅니다.
-            for _ in range(simulations_per_move):
-                # 1. 가상 보드 복사 (여기가 속도 병목 구간)
-                temp_board = self.board.copy()
-                
-                # 2. 첫 수 두기
-                sh, px, py = move%8, (move//8)%5, (move//8)//5
-                cells = self._get_cells(px, py, sh)
-                for c in cells: temp_board[c['z']][c['y']][c['x']] = self.opponent
-                
-                # 3. 랜덤 시뮬레이션 시작 (Rollout)
-                sim_turn = 0
-                current_sim_player = self.learner # 다음 턴은 상대방
-                my_sim_id = self.opponent
-                
-                while sim_turn < max_depth:
-                    # 승리 체크 (간단 버전) - 속도를 위해 정밀 체크 생략 가능하면 생략
-                    # 하지만 여기선 정확도를 위해 체크합니다.
-                    if self._check_win_simulation(temp_board) == my_sim_id:
-                        wins += 1
-                        break
-                    
-                    # 랜덤으로 아무거나 둠 (가상 상대방)
-                    # (정석 구현은 legal move를 다 찾아야 하지만 너무 느리므로 완전 랜덤 좌표 찍기)
-                    # 속도 최적화를 위해 '빈 공간 찾기' 대신 그냥 턴만 넘기는 식으로 depth만 체크할 수도 있음
-                    # 여기서는 '약식'으로 빈 공간 아무데나 하나 채우는 걸로 가정
-                    empty_spots = np.argwhere(temp_board == 0)
-                    if len(empty_spots) == 0: break
-                    
-                    # 랜덤 착수
-                    choice = empty_spots[random.randint(0, len(empty_spots)-1)]
-                    temp_board[choice[0]][choice[1]][choice[2]] = current_sim_player
-                    
-                    # 턴 교체
-                    current_sim_player = my_sim_id if current_sim_player != my_sim_id else (3 - my_sim_id)
-                    sim_turn += 1
-            
-            # 승률 계산
-            if wins > best_score:
-                best_score = wins
-                best_move = move
-        
-        return best_move
-
-    # 시뮬레이션용 승리 체크 (기존 함수 재활용을 위해 self.board 대신 인자 받음)
-    def _check_win_simulation(self, board_arr):
-        # 기존 _check_win 로직을 board_arr 대상으로 수행하도록 복사하거나 수정 필요
-        # 편의상 기존 로직을 복사해서 board_arr만 쓰도록 함 (속도상 이 방법이 최선)
-        top_map = np.zeros((5,5), dtype=int)
-        for y in range(5):
-            for x in range(5):
-                for z in range(4, -1, -1):
-                    if board_arr[z][y][x] != 0: top_map[y][x] = board_arr[z][y][x]; break
-        dirs = [(1,0), (0,1), (1,1), (1,-1)]
-        for y in range(5):
-            for x in range(5):
-                c = top_map[y][x]
-                if c == 0: continue
-                for dx, dy in dirs:
-                    cnt = 1
-                    for k in range(1, 5):
-                        nx, ny = x+dx*k, y+dy*k
-                        if 0<=nx<5 and 0<=ny<5 and top_map[ny][nx]==c: cnt+=1
-                        else: break
-                    if cnt == 5: return c
-        return 0
     def __init__(self):
         super(SpartaOmokEnv, self).__init__()
-        self.board_shape = (5, 5, 5)
+        # 3D CNN을 위해 Observation 형태 변경: (채널2, 높이5, 세로5, 가로5)
+        self.observation_space = spaces.Box(low=0, high=1, shape=(2, 5, 5, 5), dtype=np.float32)
         self.action_space = spaces.Discrete(200)
-        self.observation_space = spaces.Box(low=0, high=1, shape=(250,), dtype=np.int8)
+        self.board_shape = (5, 5, 5)
 
         self.SHAPES = [
             [(0,0,0), (1,0,0), (0,1,0)], [(0,0,0), (1,0,0), (0,-1,0)],
@@ -131,6 +65,112 @@ class SpartaOmokEnv(gym.Env):
         ]
         self.reset()
 
+    # 🤖 [엄격한 선생님] 그리디 70% + MCTS 30%
+    def _smart_bot_turn(self):
+        legal_moves = self._get_legal_moves_indices(self.opponent)
+        if not legal_moves: return
+
+        # 1. 킬각 (무조건 둠)
+        for action in legal_moves:
+            if self._simulate_move_fast(self.opponent, action):
+                self._execute_move(self.opponent, action)
+                return
+
+        # 2. 방어 (무조건 막음)
+        my_moves = self._get_legal_moves_indices(self.learner)
+        threats = []
+        for action in my_moves:
+             if self._simulate_move_fast(self.learner, action):
+                threats.append(action)
+        
+        for threat in threats:
+            if threat in legal_moves:
+                self._execute_move(self.opponent, threat)
+                return
+
+        # 3. 공격 (하이브리드 전략)
+        # 30% 확률로 깊은 수읽기(MCTS), 70% 확률로 빠르고 공격적인 수(Greedy)
+        if random.random() < 0.3:
+            best_action = self._run_mcts_simulation_corrected(legal_moves)
+        else:
+            best_action = self._get_greedy_action(legal_moves)
+
+        self._execute_move(self.opponent, best_action)
+
+    # 🧠 [MCTS 수정판] 이제 1x1 돌이 아니라 '진짜 블록'을 랜덤으로 둬보며 시뮬레이션
+    def _run_mcts_simulation_corrected(self, candidates, simulations_per_move=5, max_depth=5):
+        best_score = -9999
+        best_move = random.choice(candidates)
+
+        for move in candidates:
+            wins = 0
+            for _ in range(simulations_per_move):
+                temp_board = self.board.copy()
+                
+                # 가상 첫 수
+                sh, px, py = move%8, (move//8)%5, (move//8)//5
+                cells = self._get_cells(px, py, sh)
+                for c in cells: temp_board[c['z']][c['y']][c['x']] = self.opponent
+                
+                sim_turn = 0
+                current_sim_player = self.learner 
+                my_sim_id = self.opponent
+                
+                while sim_turn < max_depth:
+                    if self._check_win_simulation(temp_board) == my_sim_id:
+                        wins += 1; break
+                    
+                    # 랜덤 착수 (유효한 것 찾을 때까지 최대 10번 시도)
+                    placed = False
+                    for _ in range(10):
+                        r_idx = random.randint(0, 199)
+                        r_sh, r_px, r_py = r_idx%8, (r_idx//8)%5, (r_idx//8)//5
+                        r_cells = self._get_cells(r_px, r_py, r_sh)
+                        if self._check_validity_simple_for_sim(temp_board, r_cells):
+                            for c in r_cells: temp_board[c['z']][c['y']][c['x']] = current_sim_player
+                            placed = True
+                            break
+                    if not placed: break 
+
+                    current_sim_player = my_sim_id if current_sim_player != my_sim_id else (3 - my_sim_id)
+                    sim_turn += 1
+            
+            if wins > best_score:
+                best_score = wins
+                best_move = move
+        return best_move
+
+    # 🔥 [Greedy 전략] 님의 로직 (중앙, 높이, 인접 가산점)
+    def _get_greedy_action(self, candidates):
+        best_action = -1
+        max_score = -9999
+        for action in candidates:
+            score = 0
+            sh, px, py = action%8, (action//8)%5, (action//8)//5
+            cells = self._get_cells(px, py, sh)
+            
+            for c in cells:
+                score += (2 - abs(c['x'] - 2)) + (2 - abs(c['y'] - 2)) # 중앙
+                score += (4 - c['z']) * 0.5 # 낮은 높이 선호
+                # 인접 체크
+                for dx, dy, dz in [(1,0,0), (-1,0,0), (0,1,0), (0,-1,0), (0,0,1), (0,0,-1)]:
+                    nx, ny, nz = c['x']+dx, c['y']+dy, c['z']+dz
+                    if 0<=nx<5 and 0<=ny<5 and 0<=nz<5:
+                        if self.board[nz][ny][nx] == self.opponent: score += 1.5 
+            
+            score += random.uniform(0, 1.0) # 약간의 랜덤성
+            if score > max_score:
+                max_score = score
+                best_action = action
+        return best_action
+
+    # 시뮬레이션용 초간단 유효성 체크 (속도 최우선)
+    def _check_validity_simple_for_sim(self, board, cells):
+         for c in cells:
+             if not (0<=c['x']<5 and 0<=c['y']<5 and 0<=c['z']<5): return False
+             if board[c['z']][c['y']][c['x']] != 0: return False
+         return True
+
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self.board = np.zeros(self.board_shape, dtype=np.int8)
@@ -139,6 +179,7 @@ class SpartaOmokEnv(gym.Env):
         self.blocks_left = {1: 4, 2: 4}
         self.phase = 'PLACEMENT'
 
+        # 초기 배치 (고정)
         self._add_block(1, [{'x':1,'y':3,'z':0}, {'x':2,'y':3,'z':0}, {'x':1,'y':2,'z':0}], 0, True)
         self._add_block(2, [{'x':2,'y':1,'z':0}, {'x':3,'y':1,'z':0}, {'x':3,'y':2,'z':0}], 0, True)
 
@@ -152,13 +193,15 @@ class SpartaOmokEnv(gym.Env):
         return self._get_obs(), {}
 
     def _get_obs(self):
-        flat_board = self.board.flatten()
-        my_stones = (flat_board == self.learner).astype(np.int8)
-        opp_stones = (flat_board == self.opponent).astype(np.int8)
-        return np.concatenate([my_stones, opp_stones])
+        # 3D CNN용 Observation: (Channel, Depth, Height, Width)
+        # Channel 0: 내 돌, Channel 1: 상대 돌
+        my_stones = (self.board == self.learner).astype(np.float32)
+        opp_stones = (self.board == self.opponent).astype(np.float32)
+        return np.stack([my_stones, opp_stones], axis=0) # shape: (2, 5, 5, 5)
 
     def step(self, action):
         if not self._execute_move(self.learner, action):
+            # 룰 위반 시 강력한 페널티
             return self._get_obs(), -50, True, False, {}
 
         if self._check_win() == self.learner:
@@ -166,30 +209,27 @@ class SpartaOmokEnv(gym.Env):
 
         self._next_turn()
 
-        # 봇 착수 (최적화됨)
+        # 봇 착수
         self._smart_bot_turn()
 
         if self._check_win() == self.opponent:
+            # 지면 매우 큰 페널티 (4목 허용 방지)
             return self._get_obs(), -500, True, False, {}
 
         self._next_turn()
 
         terminated = False
         if self.turn_count > 100: terminated = True
-        return self._get_obs(), 0.1, terminated, False, {}
+        return self._get_obs(), -0.1, terminated, False, {}
 
-    
-    # ⚡ [핵심] 초고속 시뮬레이션 (Copy 없음)
+    # --- (기존 로직 유지) ---
     def _simulate_move_fast(self, player, action):
         sh, px, py = action%8, (action//8)%5, (action//8)//5
         cells = self._get_cells(px, py, sh)
-
         if not self._check_validity_simple(player, cells): return False
-
         for c in cells: self.board[c['z']][c['y']][c['x']] = player
         win = (self._check_win() == player)
         for c in cells: self.board[c['z']][c['y']][c['x']] = 0
-
         return win
 
     def _get_legal_moves_indices(self, player):
@@ -305,9 +345,29 @@ class SpartaOmokEnv(gym.Env):
                         else: break
                     if cnt == 5: return c
         return 0
+    # 시뮬레이션용 (Board를 인자로 받음)
+    def _check_win_simulation(self, board_arr):
+        top_map = np.zeros((5,5), dtype=int)
+        for y in range(5):
+            for x in range(5):
+                for z in range(4, -1, -1):
+                    if board_arr[z][y][x] != 0: top_map[y][x] = board_arr[z][y][x]; break
+        dirs = [(1,0), (0,1), (1,1), (1,-1)]
+        for y in range(5):
+            for x in range(5):
+                c = top_map[y][x]
+                if c == 0: continue
+                for dx, dy in dirs:
+                    cnt = 1
+                    for k in range(1, 5):
+                        nx, ny = x+dx*k, y+dy*k
+                        if 0<=nx<5 and 0<=ny<5 and top_map[ny][nx]==c: cnt+=1
+                        else: break
+                    if cnt == 5: return c
+        return 0
 
 # ============================================================================
-# 💾 [Local Save] 저장 콜백 (로컬 PC용)
+# 💾 [Local Save] 저장 콜백
 # ============================================================================
 class LocalSaveCallback(BaseCallback):
     def __init__(self, save_freq=100000, save_path="./models", verbose=0):
@@ -315,91 +375,77 @@ class LocalSaveCallback(BaseCallback):
         self.save_freq = save_freq
         self.save_path = save_path
         self.gen_count = 0
-        os.makedirs(self.save_path, exist_ok=True) # 폴더 없으면 생성
+        os.makedirs(self.save_path, exist_ok=True)
 
     def _on_step(self) -> bool:
         if self.num_timesteps % self.save_freq == 0:
             self.gen_count += 1
-            path = os.path.join(self.save_path, f"sparta_gen_{self.gen_count}")
+            path = os.path.join(self.save_path, f"sparta_cnn_gen_{self.gen_count}")
             self.model.save(path)
             if self.verbose > 0:
-                print(f"💾 [Local] Generation {self.gen_count} Saved! (Step: {self.num_timesteps}) at {path}")
+                print(f"💾 [Local] CNN Model Generation {self.gen_count} Saved! (Step: {self.num_timesteps})")
         return True
 
 def mask_fn(env): return env.get_wrapper_attr('action_masks')()
 
 # ============================================================================
-# 🏃‍♂️ [Main] 실행부
-# ============================================================================
-# ============================================================================
-# 🏃‍♂️ [Main] 실행부 (수정됨: 이어하기 기능 추가)
+# 🏃‍♂️ [Main] 실행부 (GPU 가속 + 3D CNN)
 # ============================================================================
 if __name__ == '__main__':
-    # i5-1135G7은 4코어 8스레드이므로 n_envs=4 권장
+    # i5-1135G7 (4코어) 고려하여 환경 4개 병렬 처리
     n_envs = 4 
     
-    # GPU 확인
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"🖥️ 하드웨어 가속 확인: {device.upper()} 모드로 실행합니다.")
+    # GPU 강제 할당 확인
+    if torch.cuda.is_available():
+        device = "cuda"
+        # MX450은 메모리가 작으므로 캐시 정리 한 번 해줌
+        torch.cuda.empty_cache()
+        print(f"🖥️ NVIDIA GeForce MX450 가동! (CUDA Available)")
+    else:
+        device = "cpu"
+        print("⚠️ GPU를 찾을 수 없습니다. CPU로 실행합니다.")
 
     # 환경 생성
     vec_env = SubprocVecEnv([lambda: ActionMasker(SpartaOmokEnv(), mask_fn) for _ in range(n_envs)])
 
-    # 🌟 [핵심] 저장된 모델이 있으면 불러오고, 없으면 새로 만들기
-    load_filename = "my_model.zip"  # 폴더에 넣어둔 파일 이름
+    # 이어하기 체크
+    load_filename = "sparta_cnn_final.zip"
     
+    # 🔥 [3D CNN 정책 설정]
+    # CnnPolicy를 쓰되, features_extractor_class를 우리가 만든 3D CNN으로 교체
+    policy_kwargs = dict(
+        features_extractor_class=Omok3D_CNN,
+        features_extractor_kwargs=dict(features_dim=256),
+        net_arch=[] # CNN에서 나온 256개 특징을 바로 Action Net으로 (MLP 추가 안 함)
+    )
+
     if os.path.exists(load_filename):
-        print(f"♻️ 발견! '{load_filename}' 모델을 로드하여 훈련을 이어갑니다...")
-        # custom_objects는 훈련 환경 버전에 따라 필요할 수 있음 (일단 기본 로드)
+        print(f"♻️ '{load_filename}' 발견! 훈련을 이어갑니다...")
         model = MaskablePPO.load(load_filename, env=vec_env, device=device)
-        
-        # 학습률(learning_rate) 등 일부 설정은 새로 덮어쓰기 위해 다시 설정
-        model.learning_rate = 0.0003
-        model.n_steps = 2048
-        model.batch_size = 256
-        model.gamma = 0.99
     else:
-        print("✨ 저장된 모델이 없습니다. 0부터 새로운 훈련을 시작합니다!")
+        print("✨ 3D CNN을 탑재한 새로운 AI가 태어납니다!")
         model = MaskablePPO(
-            "MlpPolicy",
+            "CnnPolicy", # 3D CNN을 쓰더라도 베이스는 CnnPolicy
             vec_env,
             verbose=1,
             learning_rate=0.0003,
-            n_steps=2048,
-            batch_size=256,
+            n_steps=1024, # VRAM 절약을 위해 2048 -> 1024로 약간 줄임
+            batch_size=128, # VRAM 절약을 위해 256 -> 128로 줄임 (MX450 최적화)
             gamma=0.99,
             device=device,
-            policy_kwargs=dict(net_arch=[1024, 1024])
+            policy_kwargs=policy_kwargs # 커스텀 3D CNN 주입
         )
 
-    print("🔥 [Local PC Mode] 로컬 스파르타 훈련 시작! 🔥")
+    print("🔥 [Sparta 3D] 지옥 훈련 시작! (Hybrid Opponent: Greedy + MCTS) 🔥")
     
-    # 500만 번 추가 훈련
-    total_steps = 5000000
-    callback = LocalSaveCallback(save_freq=100000, save_path="./models", verbose=1)
+    total_steps = 3000000 # 300만번
+    callback = LocalSaveCallback(save_freq=50000, save_path="./models", verbose=1)
 
     try:
         model.learn(total_timesteps=total_steps, callback=callback)
+        model.save("sparta_cnn_final")
+        print("✅ 훈련 완료. sparta_cnn_final.zip 저장됨.")
     except KeyboardInterrupt:
-        print("\n🛑 사용자에 의해 중단됨. 현재 상태를 저장합니다...")
-        model.save("models/interrupted_model")
+        print("\n🛑 중단됨. 현재 상태 저장 중...")
+        model.save("sparta_cnn_interrupted")
         print("✅ 저장 완료.")
-
-    print("✅ 지옥 훈련 완료!")
-    
-    # JSON 추출 및 저장
-    import json
-    params = {}
-    p_net = model.policy.mlp_extractor.policy_net
-    a_net = model.policy.action_net
-    
-    params['fc0_w'] = p_net[0].weight.detach().cpu().numpy().tolist()
-    params['fc0_b'] = p_net[0].bias.detach().cpu().numpy().tolist()
-    params['fc1_w'] = p_net[2].weight.detach().cpu().numpy().tolist()
-    params['fc1_b'] = p_net[2].bias.detach().cpu().numpy().tolist()
-    params['fc2_w'] = a_net.weight.detach().cpu().numpy().tolist()
-    params['fc2_b'] = a_net.bias.detach().cpu().numpy().tolist()
-
-    with open("legendary_ai_local_final.json", "w") as f:
-        json.dump(params, f)
-    print("🎉 최종 JSON 파일 생성 완료: legendary_ai_local_final.json")
