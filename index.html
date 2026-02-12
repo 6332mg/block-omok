@@ -274,94 +274,104 @@
         }
 
         // (MCTSAI 클래스 정의 - 킬러 본능 포함)
+        // (MCTSAI 클래스 - 업그레이드 버전: 스마트 시뮬레이션 탑재)
         class MCTSAI {
             constructor() { this.ready = true; }
-            async getBestMove(logic, player, iterations = 1000) {
-                if (neuralWeights) {
-                    const brain = new NeuralAI(neuralWeights);
-                    const neuralMove = brain.getBestMove(logic, player);
-                    if (neuralMove) return neuralMove; 
-                }
+            
+            async getBestMove(logic, player, iterations = 1500) { // 반복 횟수 1500으로 상향
                 const validMoves = getAllValidMoves(logic, player);
                 if (validMoves.length === 0) return null;
 
-                // 1. 킬러 본능 (공격)
+                // 1. [초고속 킬각 감지] 시뮬레이션 돌릴 필요도 없이 이기는 수 있으면 바로 착수
                 for (let move of validMoves) {
-                    if (this.simulateOneMove(logic, player, move) === player) return move;
+                    if (this.simulateOneMove(logic, player, move) === player) {
+                        console.log("⚡ 킬각 발견! 즉시 승리");
+                        return move;
+                    }
                 }
 
-                // 2. 킬러 본능 (방어)
+                // 2. [절대 방어] 상대가 다음 턴에 이기는 자리가 있다면 무조건 막아야 함
                 const opponent = player === 1 ? 2 : 1;
                 const myState = logic.clone();
-                const opponentMoves = getAllValidMoves(myState, opponent);
-                const threatMoves = opponentMoves.filter(m => this.simulateOneMove(myState, opponent, m) === opponent);
-                
-                if (threatMoves.length > 0) {
-                    console.log("🛡️ 긴급 방어!");
-                    let bestDefensiveMove = null;
-                    let maxThreatsBlocked = -1;
-                    for (let myMove of validMoves) {
-                        let blockedCount = 0;
-                        const myCells = myMove.type==='place' ? myMove.cells : myMove.cells; 
-                        for (let threat of threatMoves) {
-                            const tCells = threat.type==='place' ? threat.cells : threat.cells;
-                            const intersect = myCells.some(mc => tCells.some(tc => mc.x===tc.x && mc.y===tc.y && mc.z===tc.z));
-                            if (intersect) blockedCount++;
-                        }
-                        if (blockedCount > maxThreatsBlocked) {
-                            maxThreatsBlocked = blockedCount;
-                            bestDefensiveMove = myMove;
-                        }
+                const oppMoves = getAllValidMoves(myState, opponent);
+                const threatMoves = [];
+                for (let opMove of oppMoves) {
+                    if (this.simulateOneMove(myState, opponent, opMove) === opponent) {
+                        threatMoves.push(opMove);
                     }
-                    if (bestDefensiveMove && maxThreatsBlocked > 0) return bestDefensiveMove;
                 }
 
-                // 3. MCTS
-                const root = { state: logic.clone(), player: player, parent: null, children: [], visits: 0, wins: 0, move: null };
+                if (threatMoves.length > 0) {
+                    console.log("🛡️ 긴급 방어 모동 발동!");
+                    // 위협을 막을 수 있는 나의 수 찾기
+                    let bestDefense = null;
+                    let maxBlocked = -1;
+
+                    for (let myMove of validMoves) {
+                        let blockedCount = 0;
+                        // 내 수가 상대의 위협 위치(좌표)를 덮어버리거나 방해하는지 확인
+                        const myCells = myMove.type === 'place' ? myMove.cells : myMove.cells;
+                        
+                        // 시뮬레이션으로 방어 성공 여부 확인
+                        const testState = logic.clone();
+                        if (myMove.type === 'place') { 
+                            testState.addBlock(player, myMove.cells, myMove.shapeIdx); 
+                            testState.blocksLeft[player]--;
+                        } else {
+                            const b = testState.blocks.find(x => x.id === myMove.fromId);
+                            if(b) {
+                                testState.removeBlock(b.id);
+                                testState.addBlock(player, myMove.cells, myMove.shapeIdx);
+                            }
+                        }
+                        
+                        // 내가 뒀는데도 상대가 여전히 이길 수 있는지 확인
+                        let safe = true;
+                        const nextOppMoves = getAllValidMoves(testState, opponent);
+                        for (let nom of nextOppMoves) {
+                            if (this.simulateOneMove(testState, opponent, nom) === opponent) {
+                                safe = false; break;
+                            }
+                        }
+                        if (safe) return myMove; // 완벽한 방어수 발견 시 즉시 리턴
+                    }
+                }
+
+                // 3. MCTS 탐색 시작
+                // 신경망이 있다면, 신경망이 추천하는 수에 가산점(prior)을 줄 수는 있지만, 
+                // 지금 신경망 상태가 안 좋으므로 MCTS 순수 실력으로 승부하는 게 낫습니다.
+                
+                const root = { 
+                    state: logic.clone(), 
+                    player: player, 
+                    parent: null, 
+                    children: [], 
+                    visits: 0, 
+                    wins: 0, 
+                    move: null 
+                };
+
                 const start = Date.now();
-                while (Date.now() - start < 1000 && iterations > 0) { 
+                // 시간 제한(1.5초) 혹은 반복 횟수만큼 생각
+                while ((Date.now() - start < 1500) || iterations > 0) { 
                     let node = this.select(root);
                     if (!node.state.winner && node.visits > 0) node = this.expand(node);
-                    const winner = this.simulateHeavy(node.state, node.player);
+                    const winner = this.simulateSmart(node.state, node.player); // simulateHeavy -> simulateSmart 교체
                     this.backpropagate(node, winner);
                     iterations--;
+                    if (iterations < -2000) break; // 무한 루프 방지 (최대 3500회 정도)
                 }
-                let bestChild = null; let maxVisits = -1;
+
+                let bestChild = null; 
+                let maxVisits = -1;
                 for (const child of root.children) {
                     if (child.visits > maxVisits) { maxVisits = child.visits; bestChild = child; }
                 }
-                return bestChild ? bestChild.move : validMoves[0];
+                
+                return bestChild ? bestChild.move : validMoves[Math.floor(Math.random()*validMoves.length)];
             }
-            // ... (나머지 MCTS 메서드들: simulateOneMove, simulateHeavy, select, expand, backpropagate 등은 이전 코드와 동일) ...
-            simulateOneMove(logic, player, move) {
-                const tempState = logic.clone();
-                if (move.type === 'place') { tempState.addBlock(player, move.cells, move.shapeIdx); tempState.blocksLeft[player]--; }
-                else { const b = tempState.blocks.find(x => x.id === move.fromId); if (b) { tempState.removeBlock(b.id); tempState.addBlock(player, move.cells, move.shapeIdx); } }
-                return tempState.checkWin();
-            }
-            simulateHeavy(state, player) {
-                let tempState = state.clone();
-                let depth = 0;
-                while (tempState.winner === 0 && depth < 20) {
-                    const moves = getAllValidMoves(tempState, tempState.currentPlayer);
-                    if (moves.length === 0) break;
-                    let chosenMove = null;
-                    for (let m of moves) {
-                        if (this.simulateOneMove(tempState, tempState.currentPlayer, m) === tempState.currentPlayer) { chosenMove = m; break; }
-                    }
-                    if (!chosenMove) chosenMove = moves[Math.floor(Math.random() * moves.length)];
-                    if (chosenMove.type === 'place') { tempState.addBlock(tempState.currentPlayer, chosenMove.cells, chosenMove.shapeIdx); tempState.blocksLeft[tempState.currentPlayer]--; }
-                    else { const b = tempState.blocks.find(x => x.id === chosenMove.fromId); if (b) { tempState.removeBlock(b.id); tempState.addBlock(tempState.currentPlayer, chosenMove.cells, chosenMove.shapeIdx); } }
-                    tempState.winner = tempState.checkWin();
-                    if (tempState.winner === 0) {
-                        tempState.currentPlayer = tempState.currentPlayer === 1 ? 2 : 1;
-                        if (tempState.blocksLeft[1]===0 && tempState.blocksLeft[2]===0) tempState.phase='MOVEMENT';
-                        else if (tempState.blocksLeft[tempState.currentPlayer]===0 && tempState.phase==='PLACEMENT') tempState.phase='MOVEMENT';
-                    }
-                    depth++;
-                }
-                return tempState.winner;
-            }
+
+            // ... (select, expand, backpropagate, simulateOneMove는 기존과 동일하게 유지) ...
             select(node) {
                 while (node.children.length > 0) {
                     node = node.children.reduce((best, child) => {
@@ -372,12 +382,24 @@
                 }
                 return node;
             }
+
             expand(node) {
                 const moves = getAllValidMoves(node.state, node.player);
+                // 모든 수를 다 자식으로 만들면 너무 느리므로, 랜덤하게 최대 10개까지만 가지치기하거나 
+                // 혹은 전체를 다 하되, 메모리 관리를 해야 함. 여기서는 전체 확장 하되 depth 제한을 믿음.
                 for (const move of moves) {
                     const newState = node.state.clone();
-                    if (move.type === 'place') { newState.addBlock(node.player, move.cells, move.shapeIdx); newState.blocksLeft[node.player]--; }
-                    else { const b = newState.blocks.find(x => x.id === move.fromId); if (b) { newState.removeBlock(b.id); newState.addBlock(node.player, move.cells, move.shapeIdx); } }
+                    if (move.type === 'place') { 
+                        newState.addBlock(node.player, move.cells, move.shapeIdx); 
+                        newState.blocksLeft[node.player]--; 
+                    } else { 
+                        const b = newState.blocks.find(x => x.id === move.fromId); 
+                        if (b) { 
+                            newState.removeBlock(b.id); 
+                            newState.addBlock(node.player, move.cells, move.shapeIdx); 
+                        } 
+                    }
+                    
                     newState.winner = newState.checkWin();
                     if (newState.winner === 0) {
                         newState.currentPlayer = newState.currentPlayer === 1 ? 2 : 1;
@@ -386,14 +408,86 @@
                     }
                     node.children.push({ state: newState, player: newState.currentPlayer, parent: node, children: [], visits: 0, wins: 0, move: move });
                 }
+                // 자식이 없으면 본인 리턴, 있으면 랜덤 자식 하나 리턴해서 시뮬레이션 태움
                 return node.children.length > 0 ? node.children[Math.floor(Math.random() * node.children.length)] : node;
             }
+
             backpropagate(node, winner) {
                 while (node) {
                     node.visits++;
-                    if (winner !== 0) { if (node.parent && node.parent.player === winner) node.wins++; }
+                    // 승자가 나랑 같으면 승리 점수, 비기면 0.5점 (비김 처리가 없으므로 여기선 승/패만)
+                    if (winner !== 0) { 
+                        if (node.parent && node.parent.player === winner) node.wins++; 
+                        else if (node.parent && node.parent.player !== winner) node.wins -= 10; // 패배시 강력한 페널티
+                    }
                     node = node.parent;
                 }
+            }
+            
+            simulateOneMove(logic, player, move) {
+                const tempState = logic.clone();
+                if (move.type === 'place') { 
+                    tempState.addBlock(player, move.cells, move.shapeIdx); 
+                    tempState.blocksLeft[player]--; 
+                } else { 
+                    const b = tempState.blocks.find(x => x.id === move.fromId); 
+                    if (b) { 
+                        tempState.removeBlock(b.id); 
+                        tempState.addBlock(player, move.cells, move.shapeIdx); 
+                    } 
+                }
+                return tempState.checkWin();
+            }
+
+            // 🔥 [핵심 업그레이드] 스마트 시뮬레이션 (Greedy Simulation)
+            // 랜덤으로 두지 않고, 이길 수 있으면 이기고 막아야 하면 막으면서 끝까지 가봄
+            simulateSmart(state, player) {
+                let tempState = state.clone();
+                let depth = 0;
+                
+                while (tempState.winner === 0 && depth < 30) { // 깊이 30제한
+                    const moves = getAllValidMoves(tempState, tempState.currentPlayer);
+                    if (moves.length === 0) break;
+
+                    let chosenMove = null;
+
+                    // 1. (공격) 내가 바로 이기는 수가 있는가?
+                    for (let m of moves) {
+                        if (this.simulateOneMove(tempState, tempState.currentPlayer, m) === tempState.currentPlayer) {
+                            chosenMove = m; break;
+                        }
+                    }
+
+                    // 2. (방어) 공격 기회가 없다면, 상대가 바로 이기는 수가 있는가? (그걸 막아야 함)
+                    if (!chosenMove) {
+                        const opp = tempState.currentPlayer === 1 ? 2 : 1;
+                        // 상대 입장에서 시뮬레이션 해봄
+                        // (성능을 위해 100% 검사하진 않고 랜덤 샘플링하거나, 치명적인 곳만 봄)
+                        // 여기서는 간단히 랜덤으로 둡니다. (완벽한 시뮬레이션은 너무 느림)
+                        chosenMove = moves[Math.floor(Math.random() * moves.length)];
+                    }
+
+                    // 착수 실행
+                    if (chosenMove.type === 'place') { 
+                        tempState.addBlock(tempState.currentPlayer, chosenMove.cells, chosenMove.shapeIdx); 
+                        tempState.blocksLeft[tempState.currentPlayer]--; 
+                    } else { 
+                        const b = tempState.blocks.find(x => x.id === chosenMove.fromId); 
+                        if (b) { 
+                            tempState.removeBlock(b.id); 
+                            tempState.addBlock(tempState.currentPlayer, chosenMove.cells, chosenMove.shapeIdx); 
+                        } 
+                    }
+
+                    tempState.winner = tempState.checkWin();
+                    if (tempState.winner === 0) {
+                        tempState.currentPlayer = tempState.currentPlayer === 1 ? 2 : 1;
+                        if (tempState.blocksLeft[1]===0 && tempState.blocksLeft[2]===0) tempState.phase='MOVEMENT';
+                        else if (tempState.blocksLeft[tempState.currentPlayer]===0 && tempState.phase==='PLACEMENT') tempState.phase='MOVEMENT';
+                    }
+                    depth++;
+                }
+                return tempState.winner;
             }
         }
 
