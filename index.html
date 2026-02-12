@@ -277,34 +277,35 @@
         // (MCTSAI 클래스 - 업그레이드 버전: 스마트 시뮬레이션 탑재)
         // 📊 [성능 분석용] MCTSAI (Profiler 탑재)
         // 🧠 [지능 100% 복구 + 렉 제거] MCTSAI (똑똑하고 부드러운 버전)
+        // 🧬 [Neural + MCTS + Visual + Anti-Lag] 최종 완성 엔진
         class MCTSAI {
             constructor() { this.ready = true; }
             
-            // async/await 필수: 계산 중간에 멈췄다 가기 위함
-            async getBestMove(logic, player, iterations = 1500) {
+            async getBestMove(logic, player, iterations = 1500, onThinkingCallback = null) {
+                // 1. 유효수 계산
                 const validMoves = getAllValidMoves(logic, player);
                 if (validMoves.length === 0) return null;
 
-                // 1. [초고속 킬각] (이건 빨라서 그냥 둠)
+                // ----------------------------------------------------------------
+                // 🛑 [1순위] 절대 방어 & 킬각 (가장 중요)
+                // ----------------------------------------------------------------
+                // 1-1. 킬각 (내가 이기는 수)
                 for (let move of validMoves) {
                     if (this.simulateOneMove(logic, player, move) === player) {
-                        console.log("⚡ 킬각 발견! (즉시 착수)");
+                        console.log("⚡ 킬각 발견! (즉시 승리)");
                         return move;
                     }
                 }
-
-                // 2. [절대 방어] (이것도 중요해서 유지)
+                // 1-2. 방어 (상대가 이기는 수 막기)
                 const opponent = player === 1 ? 2 : 1;
                 const myState = logic.clone();
                 const oppMoves = getAllValidMoves(myState, opponent);
                 const threatMoves = [];
-                // 상대가 바로 이기는 수 찾기
                 for (let opMove of oppMoves) {
                     if (this.simulateOneMove(myState, opponent, opMove) === opponent) threatMoves.push(opMove);
                 }
-
                 if (threatMoves.length > 0) {
-                    console.log(`🛡️ 방어 모드 (위협 ${threatMoves.length}개 발견)`);
+                    console.log(`🛡️ 긴급 방어 발동! (위협 ${threatMoves.length}개)`);
                     for (let myMove of validMoves) {
                         const testState = logic.clone();
                         this.applyMove(testState, player, myMove);
@@ -315,22 +316,56 @@
                                 safe = false; break;
                             }
                         }
-                        if (safe) return myMove; 
+                        if (safe) return myMove; // 방어 성공하면 즉시 리턴
                     }
                 }
 
-                // 3. MCTS 탐색 (여기가 핵심)
+                // ----------------------------------------------------------------
+                // 🧠 [2순위] 신경망 (Legendary AI) 가동!
+                // ----------------------------------------------------------------
+                // 신경망 데이터가 있고, 아직 이동 단계가 아니라면 신경망에게 물어봄
+                if (neuralWeights && logic.phase !== 'MOVEMENT') {
+                    try {
+                        const brain = new NeuralAI(neuralWeights); // 아까 수정한 NeuralAI 사용
+                        const neuralMove = brain.getBestMove(logic, player);
+                        
+                        if (neuralMove) {
+                            console.log("🧠 Legendary AI의 선택 (신경망)");
+                            
+                            // 시각화: 신경망이 고른 자리를 잠깐(0.5초) 보여줌
+                            if (onThinkingCallback) onThinkingCallback(neuralMove);
+                            await new Promise(r => setTimeout(r, 500)); 
+
+                            return neuralMove;
+                        }
+                    } catch (e) {
+                        console.error("신경망 오류 (MCTS로 전환):", e);
+                    }
+                }
+
+                // ----------------------------------------------------------------
+                // 🌲 [3순위] MCTS (이동 단계 or 신경망이 모를 때)
+                // ----------------------------------------------------------------
+                console.log("🌲 MCTS 정밀 탐색 시작 (시각화 ON)");
+                
                 const root = { state: logic.clone(), player: player, parent: null, children: [], visits: 0, wins: 0, move: null };
                 const start = Date.now();
                 let lastYield = Date.now();
-
-                // 시간 제한을 2초 정도로 넉넉하게 줌 (똑똑하게 하려면 시간이 필요함)
-                const timeLimit = 2000; 
+                const timeLimit = 2000; // 2초 생각
 
                 while ((Date.now() - start < timeLimit) || iterations > 0) {
-                    
-                    // 🔥 [핵심 기술] 30ms마다 잠깐 멈춰서 화면을 그림 (렉 제거)
+                    // 30ms마다 화면 갱신 (렉 제거)
                     if (Date.now() - lastYield > 30) {
+                        let currentBestNode = null;
+                        let maxV = -1;
+                        // 현재까지 가장 유력한 후보를 시각화
+                        if(root.children.length > 0) {
+                            for(let c of root.children) if(c.visits > maxV) { maxV = c.visits; currentBestNode = c; }
+                        }
+
+                        if (onThinkingCallback && currentBestNode && currentBestNode.move) {
+                            onThinkingCallback(currentBestNode.move);
+                        }
                         await new Promise(r => setTimeout(r, 0));
                         lastYield = Date.now();
                     }
@@ -338,14 +373,12 @@
                     let node = this.select(root);
                     if (!node.state.winner && node.visits > 0) node = this.expand(node);
                     
-                    // 🌟 [지능 복구] simulateFast(랜덤) 대신 simulateHeavy(진지함) 사용!
+                    // 진지한 시뮬레이션 (Heavy)
                     const winner = this.simulateHeavy(node.state, node.player);
                     
                     this.backpropagate(node, winner);
                     iterations--;
-                    
-                    // 너무 오래 걸리면(5초 이상) 강제 종료 (안전장치)
-                    if (Date.now() - start > 5000) break;
+                    if (Date.now() - start > 5000) break; // 5초 안전장치
                 }
 
                 let bestChild = null; let maxVisits = -1;
@@ -355,7 +388,7 @@
                 return bestChild ? bestChild.move : validMoves[0];
             }
 
-            // ... (select, expand, backpropagate, applyMove, simulateOneMove는 기존 유지) ...
+            // ... (아래 함수들은 기존 그대로 유지) ...
             select(node) {
                 while (node.children.length > 0) {
                     node = node.children.reduce((best, child) => {
@@ -366,7 +399,6 @@
                 }
                 return node;
             }
-
             expand(node) {
                 const moves = getAllValidMoves(node.state, node.player);
                 for (const move of moves) {
@@ -376,7 +408,6 @@
                 }
                 return node.children.length > 0 ? node.children[Math.floor(Math.random() * node.children.length)] : node;
             }
-
             backpropagate(node, winner) {
                 while (node) {
                     node.visits++;
@@ -387,18 +418,9 @@
                     node = node.parent;
                 }
             }
-
             applyMove(state, player, move) {
-                if (move.type === 'place') { 
-                    state.addBlock(player, move.cells, move.shapeIdx); 
-                    state.blocksLeft[player]--; 
-                } else { 
-                    const b = state.blocks.find(x => x.id === move.fromId); 
-                    if (b) { 
-                        state.removeBlock(b.id); 
-                        state.addBlock(player, move.cells, move.shapeIdx); 
-                    } 
-                }
+                if (move.type === 'place') { state.addBlock(player, move.cells, move.shapeIdx); state.blocksLeft[player]--; }
+                else { const b = state.blocks.find(x => x.id === move.fromId); if (b) { state.removeBlock(b.id); state.addBlock(player, move.cells, move.shapeIdx); } }
                 state.winner = state.checkWin();
                 if (state.winner === 0) {
                     state.currentPlayer = state.currentPlayer === 1 ? 2 : 1;
@@ -406,45 +428,24 @@
                     else if (state.blocksLeft[state.currentPlayer]===0 && state.phase==='PLACEMENT') state.phase='MOVEMENT';
                 }
             }
-
             simulateOneMove(logic, player, move) {
                 const tempState = logic.clone();
                 this.applyMove(tempState, player, move);
                 return tempState.winner;
             }
-
-            // 🌟 [원상복구] 진지한 시뮬레이션 (랜덤 찍기 X, 이길 수 있으면 이기는 수 읽기)
             simulateHeavy(state, player) {
                 let tempState = state.clone();
                 let depth = 0;
-                
-                // 깊이 30수까지 내다봄
                 while (tempState.winner === 0 && depth < 30) {
                     const currentPlayer = tempState.currentPlayer;
                     const moves = getAllValidMoves(tempState, currentPlayer);
-                    
                     if (moves.length === 0) break;
-                    
                     let chosenMove = null;
-
-                    // 1. 내가 이기는 수가 있나? (공격)
-                    // (모든 수를 다 해보면 너무 느리니, 앞에서부터 50% 정도만 보거나 랜덤하게 섞어서 봄)
-                    // 성능을 위해 간단히 검사
                     for (let i = 0; i < moves.length; i++) {
-                         // 너무 많으면 일부만 검사 (속도 타협)
                         if (moves.length > 20 && i > 10 && Math.random() > 0.3) continue; 
-                        
-                        if (this.simulateOneMove(tempState, currentPlayer, moves[i]) === currentPlayer) {
-                            chosenMove = moves[i];
-                            break;
-                        }
+                        if (this.simulateOneMove(tempState, currentPlayer, moves[i]) === currentPlayer) { chosenMove = moves[i]; break; }
                     }
-
-                    // 2. 없다면 랜덤 (하지만 이 랜덤은 스마트 시뮬레이션 내부의 랜덤이므로 MCTS 전체로 보면 확률적으로 수렴함)
-                    if (!chosenMove) {
-                        chosenMove = moves[Math.floor(Math.random() * moves.length)];
-                    }
-
+                    if (!chosenMove) chosenMove = moves[Math.floor(Math.random() * moves.length)];
                     this.applyMove(tempState, currentPlayer, chosenMove);
                     depth++;
                 }
@@ -715,9 +716,25 @@
         const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping=true; controls.maxPolarAngle=Math.PI/2;
         
         const boardGroup = new THREE.Group(); scene.add(boardGroup);
+        // [기존 코드]
         const ghostGroup = new THREE.Group(); scene.add(ghostGroup);
         const hintGroup = new THREE.Group(); scene.add(hintGroup);
-        
+
+        // ✅ [새로 추가] AI 고민 표시 그룹 생성
+        const thinkingGroup = new THREE.Group(); scene.add(thinkingGroup);
+
+        // ✅ [새로 추가] 고민 흔적 지우기 함수
+        function clearThinkingIndicators() {
+            while(thinkingGroup.children.length > 0) thinkingGroup.remove(thinkingGroup.children[0]);
+        }
+
+        // ✅ [새로 추가] 고민 흔적 그리기 함수 (반투명 주황색)
+        function showThinkingIndicator(move) {
+            // drawGhost 함수를 재활용합니다. 색상은 주황색(0xFFA500), 투명도는 0.4로 설정
+            if (!move || !move.cells) return;
+            // 착수(place)든 이동(move)이든 최종적으로 놓이는 위치를 표시
+            drawGhost(move.cells, 0xFFA500, thinkingGroup, 0.4);
+        }
         const hitPlane = new THREE.Mesh(new THREE.PlaneGeometry(6,6), new THREE.MeshBasicMaterial({ visible:false, side:THREE.DoubleSide }));
         hitPlane.rotation.x=-Math.PI/2; hitPlane.position.y=0.5; scene.add(hitPlane);
         scene.add(new THREE.GridHelper(5,5, 0xbdc3c7, 0xecf0f1));
@@ -886,45 +903,57 @@
             if (isOnline) set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize());
         }
 
+        // [askAI 수정] 힌트 요청 시 시각화 적용
         window.askAI = async () => {
             if(logic.winner!==0) return;
-            
-            // 1. 문구 띄우기
             const loader = document.getElementById('ai-loader');
             loader.innerText = "💡 힌트 찾는 중...";
             loader.style.display = 'block';
-            
             await new Promise(r => setTimeout(r, 10));
 
-            // 2. AI 생각
-            const move = await ai.getBestMove(logic, logic.currentPlayer);
+            // 1. 기존 표시 지우기
+            clearThinkingIndicators();
+            while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); // 기존 힌트도 지움
+
+            // 2. 시각화 콜백 전달
+            const move = await ai.getBestMove(logic, logic.currentPlayer, 1500, (thinkingMove) => {
+                clearThinkingIndicators();
+                showThinkingIndicator(thinkingMove);
+            });
             
-            // 3. 문구 숨기기
+            // 3. 최종 지우기
+            clearThinkingIndicators();
             loader.style.display = 'none';
 
             if(move) {
-                while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]);
                 if(move.type==='move') {
                     const src = logic.blocks.find(b=>b.id===move.fromId);
                     if(src) drawGhost(src.cells, 0xff4444, hintGroup, 0.6);
                     log("⚠️ [힌트] 빨강 -> 노랑 이동");
                 } else log("💡 [힌트] 노랑 위치 착수");
+                // 최종 힌트는 노란색으로 진하게 표시
                 drawGhost(move.cells, 0xf1c40f, hintGroup, 0.8);
             } else log("AI: 둘 곳이 없어요.");
         };
+        // [runAI 수정] AI 대전 시 시각화 적용
         async function runAI() {
-            // 1. 문구 띄우기
             const loader = document.getElementById('ai-loader');
-            loader.innerText = "🤖 AI 고민 중..."; // 멘트 변경 가능
+            loader.innerText = "🤖 AI 고민 중...";
             loader.style.display = 'block';
-            
-            // 화면이 그려질 틈을 아주 살짝 줌 (10ms)
             await new Promise(r => setTimeout(r, 10));
 
-            // 2. AI 생각 (오래 걸림)
-            const move = await ai.getBestMove(logic, logic.currentPlayer);
+            // 1. 기존 표시 지우기
+            clearThinkingIndicators(); 
+
+            // 2. AI에게 시각화 콜백 함수 전달!
+            // (thinkingMove가 들어오면 지우고 다시 그림 = 깜빡이는 효과)
+            const move = await ai.getBestMove(logic, logic.currentPlayer, 1500, (thinkingMove) => {
+                clearThinkingIndicators();
+                showThinkingIndicator(thinkingMove);
+            });
             
-            // 3. 문구 숨기기
+            // 3. 다 생각했으니 최종적으로 지우기
+            clearThinkingIndicators();
             loader.style.display = 'none';
 
             if(move) {
