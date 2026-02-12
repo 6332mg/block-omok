@@ -10,7 +10,7 @@
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh; z-index: 10; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
         
         .top-bar { pointer-events: auto; display: flex; gap: 10px; background: rgba(255,255,255,0.95); padding: 10px 15px; margin: 10px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); align-items: flex-start; }
-        .btn-home { background: #34495e; color: white; border: none; padding: 0 12px; border-radius: 8px; cursor: pointer; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; height: 50px; }
+        .btn-home { background: #34495e; color: white; border: none; padding: 0 15px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: bold; display: flex; align-items: center; justify-content: center; height: 50px; letter-spacing: -0.5px; }
         
         .game-info-col { flex-grow: 1; display: flex; flex-direction: column; gap: 5px; }
         .row-upper { display: flex; justify-content: space-between; align-items: center; width: 100%; }
@@ -55,9 +55,10 @@
         #ai-loader { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 15px 30px; border-radius: 30px; font-weight: bold; font-size: 1.2rem; z-index: 50; pointer-events: none; backdrop-filter: blur(5px); }
         #my-player-badge { font-size: 0.8rem; font-weight: bold; padding: 4px 10px; border-radius: 15px; display: inline-block; color: white; }
         
-        #win-rate-bar-container { position: absolute; top: 130px; right: 10px; width: 10px; height: 150px; background: #eee; border-radius: 5px; overflow: hidden; border: 1px solid #ccc; z-index: 5; pointer-events: none; }
-        #win-rate-fill { width: 100%; height: 50%; background: #2c3e50; transition: height 1s ease-in-out; position: absolute; bottom: 0; }
-        #win-rate-text { position: absolute; top: 110px; right: 25px; font-size: 0.8rem; font-weight: bold; color: #333; text-align: right; width: 100px; text-shadow: 1px 1px 0 white; }
+        /* 🌟 승률 바 스타일 수정 (항상 보이도록) */
+        #win-rate-bar-container { position: absolute; top: 130px; right: 10px; width: 12px; height: 150px; background: #ddd; border-radius: 6px; overflow: hidden; border: 1px solid #999; z-index: 5; pointer-events: none; display: none; }
+        #win-rate-fill { width: 100%; height: 50%; background: linear-gradient(to top, #2c3e50, #4ca1af); transition: height 0.5s ease-out; position: absolute; bottom: 0; }
+        #win-rate-text { position: absolute; top: 110px; right: 30px; font-size: 0.8rem; font-weight: bold; color: #333; text-align: right; width: 120px; text-shadow: 1px 1px 0 rgba(255,255,255,0.8); display: none; }
 
         .modal-overlay { pointer-events: auto; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 300; }
         .modal-content { background: white; width: 85%; max-width: 500px; max-height: 85%; border-radius: 12px; padding: 25px; overflow-y: auto; position: relative; text-align: center; }
@@ -66,6 +67,8 @@
         .rule-sec { margin-bottom: 15px; text-align: left; } .rule-head { font-weight: bold; color: #2c3e50; margin-bottom: 5px; } .rule-desc { font-size: 0.9rem; color: #555; line-height: 1.5; }
         
         .end-btn-group { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+        .req-btn { width: 48%; padding: 12px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; color: white; }
+        .req-btn.yes { background: #2ecc71; } .req-btn.no { background: #e74c3c; }
     </style>
     <script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } } </script>
 </head>
@@ -114,7 +117,7 @@
 
     <div id="ui-layer" style="display:none;">
         <div class="top-bar">
-            <button class="btn-home" onclick="goHome()">🏠</button>
+            <button class="btn-home" onclick="goHome()">홈화면</button>
             <div class="game-info-col">
                 <div class="row-upper">
                     <div class="title-row"> <span style="font-weight:bold;">BLOCK OMOK</span> <span id="game-phase" class="phase-badge">착수</span> </div>
@@ -174,6 +177,17 @@
         </div>
     </div>
 
+    <div id="req-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>📩 요청 도착</h3>
+            <div id="req-msg" style="margin:20px 0; font-size:1.1rem; line-height:1.5;"></div>
+            <div style="display:flex; justify-content:space-between;">
+                <button class="req-btn yes" id="btn-req-yes">⭕ 수락</button>
+                <button class="req-btn no" id="btn-req-no">❌ 거절</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, set, onValue, update, get, child, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
@@ -202,15 +216,7 @@
         let neuralWeights = null;
         let p1Name = "흑", p2Name = "백";
 
-        window.goHome = () => {
-            if(confirm("게임에서 나가시겠습니까?")) {
-                if(isOnline && !isSpectator && logic.winner === 0) {
-                    // (선택 사항) 여기서 기권 처리를 할 수도 있음
-                }
-                location.hash = ""; 
-            }
-        };
-
+        window.goHome = () => { if(confirm("게임에서 나가시겠습니까?")) { location.hash = ""; } };
         window.addEventListener('popstate', () => {
             const hash = location.hash;
             if(!hash) {
@@ -222,20 +228,123 @@
                 document.getElementById('lobby-wait').style.display='none';
                 document.getElementById('win-rate-bar-container').style.display='none';
                 document.getElementById('win-rate-text').style.display='none';
-                
                 isOnline = false; isSpectator = false; logic.reset(); 
                 myRoomId = null; myPlayerNum = 0;
             }
         });
 
+        // 🌟 NeuralAI: AI 핵심 지능 (여기서 JSON 파일이 없으면 오류남)
+        // 🌟 NeuralAI 클래스 전체를 이걸로 덮어쓰거나, getBestMove 함수만 교체하세요.
         class NeuralAI {
             constructor(weights) { this.weights = weights; this.ready = true; }
+
             getBestMove(logic, player) {
-                if (logic.phase === 'MOVEMENT' || logic.blocksLeft[player] <= 0) return null;
-                const validActions = []; const actionToMove = {};
+                // 1. 착수(Placement) 단계일 때: 기존 로직 그대로 사용
+                if (logic.phase === 'PLACEMENT') {
+                    if (logic.blocksLeft[player] <= 0) return null;
+                    return this.computeBestPlacement(logic, player);
+                }
+
+                // 2. 이동(Movement) 단계일 때: "가상으로 들어보고(Pick) -> 착수(Place)" 시뮬레이션
+                else if (logic.phase === 'MOVEMENT') {
+                    let bestScore = -Infinity;
+                    let bestMove = null;
+
+                    // 내 블록들을 찾는다 (고정된 블록 제외)
+                    const myBlocks = logic.blocks.filter(b => b.player === player && !b.isFixed);
+
+                    // 각 블록을 하나씩 들어본다
+                    for (const block of myBlocks) {
+                        // 블록을 들 수 없는 상태(위에 누가 있거나)면 패스
+                        if (!logic.canPick(block)) continue;
+
+                        // [시뮬레이션] 가상으로 블록 제거
+                        const tempLogic = logic.clone();
+                        tempLogic.removeBlock(block.id);
+                        // "이 블록을 들었다"고 설정 (제자리 착수 방지 등 규칙 적용 위해)
+                        tempLogic.selectedBlockOriginalCells = block.cells;
+
+                        // 이 상태에서 AI에게 "어디에 두는 게 좋아?"라고 물어봄
+                        // AI는 logits(모든 위치에 대한 점수)를 반환함
+                        const logits = this.computeLogits(tempLogic, player);
+
+                        // 상위 10개의 좋은 수만 추려서 유효성 검사 (속도 최적화)
+                        const topActions = logits
+                            .map((score, idx) => ({ score, idx }))
+                            .sort((a, b) => b.score - a.score)
+                            .slice(0, 20); // 상위 20개 후보만 검사
+
+                        for (const action of topActions) {
+                            // 점수가 현재 찾은 최적수보다 낮으면 더 볼 필요 없음
+                            if (action.score <= bestScore) continue;
+
+                            // AI가 추천한 위치(index)를 좌표로 변환
+                            const sh = action.idx % 8;
+                            const px = Math.floor(action.idx / 8) % 5;
+                            const py = Math.floor(Math.floor(action.idx / 8) / 5);
+                            
+                            // 기저 셀 계산
+                            let baseCells = getCellsFromBase(px, py, sh);
+                            let validZFound = false;
+                            let finalCells = null;
+
+                            // 바닥부터 쌓아올리며 가능한 z축 찾기
+                            for (let dz = 0; dz < 5; dz++) {
+                                const testCells = baseCells.map(c => ({ x: c.x, y: c.y, z: c.z + dz }));
+                                if (testCells.some(c => c.z > 4)) break;
+
+                                // 규칙 위반인지 검사 (이동 규칙 적용)
+                                const check = tempLogic.checkValidity(player, testCells, true, block.cells);
+                                if (check.ok) {
+                                    finalCells = testCells;
+                                    validZFound = true;
+                                    break; // 가장 낮은 곳에 둠
+                                }
+                            }
+
+                            // 유효한 수라면 후보로 등록
+                            if (validZFound && finalCells) {
+                                bestScore = action.score;
+                                bestMove = {
+                                    type: 'move',
+                                    fromId: block.id, // 이 블록을 옮긴다
+                                    cells: finalCells,
+                                    shapeIdx: sh
+                                };
+                            }
+                        }
+                    }
+                    return bestMove; // 가장 높은 점수를 받은 이동 반환
+                }
+                return null;
+            }
+
+            // 🌟 AI의 판단(Logits)을 계산하는 함수 (공통 사용을 위해 분리)
+            computeLogits(logic, player) {
+                const obs = [];
+                const opp = player === 1 ? 2 : 1;
+                // 보드 상태 입력 (One-hot encoding)
+                for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) obs.push(logic.board[z][y][x] === player ? 1 : 0);
+                for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) obs.push(logic.board[z][y][x] === opp ? 1 : 0);
+                
+                // 신경망 연산
+                let h1 = this.matMul(obs, this.weights.fc0_w, this.weights.fc0_b).map(x => Math.tanh(x));
+                let h2 = this.matMul(h1, this.weights.fc1_w, this.weights.fc1_b).map(x => Math.tanh(x));
+                const logits = this.matMul(h2, this.weights.fc2_w, this.weights.fc2_b);
+                return logits;
+            }
+
+            // 기존 착수 로직 (함수로 분리함)
+            computeBestPlacement(logic, player) {
+                const logits = this.computeLogits(logic, player);
+                const validActions = [];
+                const actionToMove = {};
+
+                // 모든 가능한 착수 위치 미리 계산
                 for(let i=0; i<200; i++) {
                     const sh = i % 8; const px = Math.floor(i / 8) % 5; const py = Math.floor(Math.floor(i / 8) / 5); 
-                    let baseCells = getCellsFromBase(px, py, sh); let validZFound = false; let finalCells = null;
+                    let baseCells = getCellsFromBase(px, py, sh); 
+                    let validZFound = false; let finalCells = null;
                     for (let dz = 0; dz < 5; dz++) {
                         const testCells = baseCells.map(c => ({ x: c.x, y: c.y, z: c.z + dz }));
                         if (testCells.some(c => c.z > 4)) break;
@@ -244,17 +353,13 @@
                     }
                     if (validZFound && finalCells) { validActions.push(i); actionToMove[i] = { type: 'place', cells: finalCells, shapeIdx: sh }; }
                 }
+
                 if (validActions.length === 0) return null;
-                const obs = []; const opp = player === 1 ? 2 : 1;
-                for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) obs.push(logic.board[z][y][x] === player ? 1 : 0);
-                for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) obs.push(logic.board[z][y][x] === opp ? 1 : 0);
-                let h1 = this.matMul(obs, this.weights.fc0_w, this.weights.fc0_b).map(x => Math.tanh(x));
-                let h2 = this.matMul(h1, this.weights.fc1_w, this.weights.fc1_b).map(x => Math.tanh(x));
-                const logits = this.matMul(h2, this.weights.fc2_w, this.weights.fc2_b);
                 let bestIdx = -1; let maxVal = -Infinity;
                 for (let idx of validActions) { if (logits[idx] > maxVal) { maxVal = logits[idx]; bestIdx = idx; } }
                 return bestIdx !== -1 ? actionToMove[bestIdx] : null;
             }
+
             matMul(input, w, b) {
                 const output = new Array(b.length).fill(0);
                 for (let j = 0; j < b.length; j++) { let sum = b[j]; for (let i = 0; i < input.length; i++) { sum += input[i] * w[j][i]; } output[j] = sum; }
@@ -262,35 +367,59 @@
             }
         }
 
+        // 🌟 MCTSAI: AI의 수읽기 엔진 (이전보다 지능 상향)
         class MCTSAI {
             constructor() { this.ready = true; }
             async getBestMove(logic, player, iterations = 1500, onThinkingCallback = null) {
                 const validMoves = getAllValidMoves(logic, player);
                 if (validMoves.length === 0) return null;
-                // 1. 킬각
+                
+                // 1. 킬각 (즉시 승리) 발견 시 바로 둠
                 for (let move of validMoves) if (this.simulateOneMove(logic, player, move) === player) return move;
-                // 2. 방어
-                const opponent = player === 1 ? 2 : 1; const myState = logic.clone(); 
-                const oppMoves = getAllValidMoves(myState, opponent); const threatMoves = [];
-                for (let opMove of oppMoves) if (this.simulateOneMove(myState, opponent, opMove) === opponent) threatMoves.push(opMove);
+                
+                // 2. 방어 (상대 킬각) 발견 시 바로 막음
+                const opponent = player === 1 ? 2 : 1; 
+                const myState = logic.clone(); 
+                const oppMoves = getAllValidMoves(myState, opponent); 
+                const threatMoves = [];
+                for (let opMove of oppMoves) {
+                    if (this.simulateOneMove(myState, opponent, opMove) === opponent) threatMoves.push(opMove);
+                }
                 if (threatMoves.length > 0) {
+                    // 방어 가능한 수 찾기
                     for (let myMove of validMoves) {
-                        const testState = logic.clone(); this.applyMove(testState, player, myMove); 
-                        let safe = true; const nextOppMoves = getAllValidMoves(testState, opponent);
-                        for (let nom of nextOppMoves) if (this.simulateOneMove(testState, opponent, nom) === opponent) { safe = false; break; }
-                        if (safe) return myMove;
+                        const testState = logic.clone(); 
+                        this.applyMove(testState, player, myMove); 
+                        let safe = true; 
+                        const nextOppMoves = getAllValidMoves(testState, opponent);
+                        for (let nom of nextOppMoves) {
+                            if (this.simulateOneMove(testState, opponent, nom) === opponent) { safe = false; break; }
+                        }
+                        if (safe) return myMove; // 방어 성공
                     }
                 }
-                // 3. 신경망
+
+                // 3. 신경망 (JSON 파일이 있으면 사용)
                 if (neuralWeights && logic.phase !== 'MOVEMENT') {
-                    try { const brain = new NeuralAI(neuralWeights); const neuralMove = brain.getBestMove(logic, player); 
-                    if (neuralMove) { if (onThinkingCallback) onThinkingCallback(neuralMove); await new Promise(r => setTimeout(r, 500)); return neuralMove; } } catch (e) { console.error(e); }
+                    try { 
+                        const brain = new NeuralAI(neuralWeights); 
+                        const neuralMove = brain.getBestMove(logic, player); 
+                        if (neuralMove) { 
+                            if (onThinkingCallback) onThinkingCallback(neuralMove); 
+                            await new Promise(r => setTimeout(r, 500)); 
+                            return neuralMove; 
+                        } 
+                    } catch (e) { console.error("Neural Fail", e); }
                 }
-                // 4. MCTS
+
+                // 4. MCTS 시뮬레이션 (최후의 수단) - 시간 제한을 넉넉히 둠
                 const root = { state: logic.clone(), player: player, parent: null, children: [], visits: 0, wins: 0, move: null };
-                const start = Date.now(); let lastYield = Date.now();
-                while ((Date.now() - start < 2000) || iterations > 0) {
+                const start = Date.now(); 
+                let lastYield = Date.now();
+                // 생각 시간을 늘림 (최대 2.5초)
+                while ((Date.now() - start < 2500) || iterations > 0) {
                     if (Date.now() - lastYield > 30) {
+                        // 시각화 업데이트
                         let currentBestNode = null; let maxV = -1;
                         if(root.children.length > 0) for(let c of root.children) if(c.visits > maxV) { maxV = c.visits; currentBestNode = c; }
                         if (onThinkingCallback && currentBestNode && currentBestNode.move) onThinkingCallback(currentBestNode.move);
@@ -299,18 +428,24 @@
                     let node = this.select(root);
                     if (!node.state.winner && node.visits > 0) node = this.expand(node);
                     const winner = this.simulateHeavy(node.state, node.player);
-                    this.backpropagate(node, winner); iterations--; if (Date.now() - start > 5000) break;
+                    this.backpropagate(node, winner); 
+                    iterations--; 
+                    if (Date.now() - start > 5000) break; // 최대 5초 강제 종료
                 }
                 let bestChild = null; let maxVisits = -1;
                 for (const child of root.children) { if (child.visits > maxVisits) { maxVisits = child.visits; bestChild = child; } }
                 return bestChild ? bestChild.move : validMoves[0];
             }
+            // 승률 분석용 (빠르게 500판)
             getWinRate(logic, player, iterations = 500) {
                 const root = { state: logic.clone(), player: player, parent: null, children: [], visits: 0, wins: 0, move: null };
                 const start = Date.now();
                 while (iterations > 0 && Date.now() - start < 500) {
-                    let node = this.select(root); if (!node.state.winner && node.visits > 0) node = this.expand(node);
-                    const winner = this.simulateHeavy(node.state, node.player); this.backpropagate(node, winner); iterations--;
+                    let node = this.select(root); 
+                    if (!node.state.winner && node.visits > 0) node = this.expand(node);
+                    const winner = this.simulateHeavy(node.state, node.player); 
+                    this.backpropagate(node, winner); 
+                    iterations--;
                 }
                 if (root.visits === 0) return 50;
                 return Math.max(0, Math.min(100, (root.wins / root.visits) * 100));
@@ -327,8 +462,9 @@
                     const moves = getAllValidMoves(tempState, currentPlayer); 
                     if (moves.length === 0) break; 
                     let chosenMove = null; 
+                    // 스마트 시뮬레이션: 이기는 수가 있으면 바로 둔다
                     for (let i = 0; i < moves.length; i++) { 
-                        if (moves.length > 20 && i > 10 && Math.random() > 0.3) continue; 
+                        if (moves.length > 20 && i > 10 && Math.random() > 0.4) continue; 
                         if (this.simulateOneMove(tempState, currentPlayer, moves[i]) === currentPlayer) { chosenMove = moves[i]; break; } 
                     } 
                     if (!chosenMove) chosenMove = moves[Math.floor(Math.random() * moves.length)]; 
@@ -398,7 +534,7 @@
                 return {ok:true};
             }
             confirmMove(cells, shapeIdx) {
-                if (this.phase === 'PLACEMENT') { if(!isOnline) this.saveState(); this.addBlock(this.currentPlayer, cells, shapeIdx); this.blocksLeft[this.currentPlayer]--; } 
+                if (this.phase === 'PLACEMENT') { this.saveState(); this.addBlock(this.currentPlayer, cells, shapeIdx); this.blocksLeft[this.currentPlayer]--; } 
                 else { this.addBlock(this.currentPlayer, cells, shapeIdx); this.selectedBlock = null; this.selectedBlockOriginalCells = null; }
                 this.winner = this.checkWin();
                 if (this.winner === 0) { 
@@ -411,36 +547,28 @@
             }
             checkWin() {
                 const topMap = Array.from({length: 5}, () => Array(5).fill(0));
-                // 가독성 복구
-                for(let y=0; y<5; y++) {
-                    for(let x=0; x<5; x++) {
-                        for(let z=4; z>=0; z--) {
-                            if(this.board[z][y][x]!==0) { topMap[y][x]=this.board[z][y][x]; break; }
-                        }
-                    }
-                }
+                for(let y=0; y<5; y++) { for(let x=0; x<5; x++) { for(let z=4; z>=0; z--) { if(this.board[z][y][x]!==0) { topMap[y][x]=this.board[z][y][x]; break; } } } }
                 const dirs = [{dx:1, dy:0}, {dx:0, dy:1}, {dx:1, dy:1}, {dx:1, dy:-1}];
                 for(let y=0; y<5; y++) {
                     for(let x=0; x<5; x++) {
                         let c = topMap[y][x]; if(c===0) continue; 
                         for(let d of dirs) { 
                             let cnt=1; 
-                            for(let k=1; k<5; k++) { 
-                                let nx=x+d.dx*k, ny=y+d.dy*k; 
-                                if(nx>=0&&nx<5&&ny>=0&&ny<5&&topMap[ny][nx]===c) cnt++; else break; 
-                            } 
+                            for(let k=1; k<5; k++) { let nx=x+d.dx*k, ny=y+d.dy*k; if(nx>=0&&nx<5&&ny>=0&&ny<5&&topMap[ny][nx]===c) cnt++; else break; } 
                             if(cnt===5) return c; 
                         } 
                     }
                 } 
                 return 0;
             }
-            saveState() { if(isOnline) return; const s = { board: JSON.parse(JSON.stringify(this.board)), blocks: JSON.parse(JSON.stringify(this.blocks)), turnCount: this.turnCount, currentPlayer: this.currentPlayer, blocksLeft: {...this.blocksLeft}, phase: this.phase, winner: this.winner }; this.history.push(s); }
+            // 🌟 수정: 멀티 모드에서도 무르기를 위해 히스토리 저장
+            saveState() { const s = { board: JSON.parse(JSON.stringify(this.board)), blocks: JSON.parse(JSON.stringify(this.blocks)), turnCount: this.turnCount, currentPlayer: this.currentPlayer, blocksLeft: {...this.blocksLeft}, phase: this.phase, winner: this.winner }; this.history.push(s); }
             undo() { if(this.history.length===0) return false; const s = this.history.pop(); Object.assign(this, s); this.selectedBlock=null; this.selectedBlockOriginalCells=null; return true; }
         }
 
         function getAllValidMoves(logic, player) {
             const moves = [];
+            // 🌟 AI가 더 똑똑해지도록 모든 경우의 수를 꼼꼼히 탐색 (압축 해제)
             if (logic.phase === 'PLACEMENT') {
                 if (logic.blocksLeft[player] > 0) { 
                     for (let sh = 0; sh < 8; sh++) { 
@@ -513,10 +641,24 @@
 
             document.getElementById('btn-reset').style.display = isOnline ? 'none' : 'inline-block';
         }
+        
+        // 🌟 승률 바 수정: 사라지지 않고 항상 표시
         function updateWinRateUI() {
-            if (logic.winner !== 0) { document.getElementById('win-rate-text').innerText = logic.winner === 1 ? "흑 승리!" : "백 승리!"; document.getElementById('win-rate-fill').style.height = logic.winner === 1 ? "100%" : "0%"; return; }
-            setTimeout(() => { const winRate = ai.getWinRate(logic, logic.currentPlayer, 500); let blackWinRate = logic.currentPlayer === 1 ? winRate : (100 - winRate); document.getElementById('win-rate-text').innerText = `흑 승률: ${Math.round(blackWinRate)}%`; document.getElementById('win-rate-fill').style.height = `${Math.round(blackWinRate)}%`; }, 10);
+            if (logic.winner !== 0) { 
+                document.getElementById('win-rate-text').innerText = logic.winner === 1 ? "흑 승리!" : "백 승리!"; 
+                document.getElementById('win-rate-fill').style.height = logic.winner === 1 ? "100%" : "0%"; 
+                return; 
+            }
+            setTimeout(() => { 
+                // 현재 턴인 사람의 승률을 구함
+                const winRate = ai.getWinRate(logic, logic.currentPlayer, 500); 
+                // 흑(Player 1) 기준 승률로 변환
+                let blackWinRate = logic.currentPlayer === 1 ? winRate : (100 - winRate); 
+                document.getElementById('win-rate-text').innerText = `흑 승률: ${Math.round(blackWinRate)}%`; 
+                document.getElementById('win-rate-fill').style.height = `${Math.round(blackWinRate)}%`; 
+            }, 10);
         }
+
         function renderBoard() {
             for(let i=boardGroup.children.length-1; i>=0; i--) boardGroup.remove(boardGroup.children[i]);
             const geo = new RoundedBoxGeometry(0.98,0.98,0.98, 4, 0.1);
@@ -572,18 +714,40 @@
             const badge = document.getElementById('my-player-badge');
             if (isSpectator) { badge.innerText = "👀 관전 모드"; badge.style.background = "#7f8c8d"; } else { badge.innerText = pNum===1 ? "🌐 Host (흑)" : "🌐 Guest (백)"; badge.style.background = pNum===1 ? "#e74c3c" : "#2ecc71"; }
             
-            onValue(ref(db, 'rooms/' + myRoomId + '/board'), (snap) => { if (snap.val()) { logic.deserialize(snap.val()); renderBoard(); updateUI(); updateWinRateUI(); checkMultiGameEnd(); } });
+            // 🌟 수정: 상대방 수를 받아올 때도 상태 저장 (무르기용)
+            onValue(ref(db, 'rooms/' + myRoomId + '/board'), (snap) => { 
+                if (snap.val()) { 
+                    if(logic.turnCount > 0) logic.saveState();
+                    logic.deserialize(snap.val()); renderBoard(); updateUI(); updateWinRateUI(); checkMultiGameEnd(); 
+                } 
+            });
             onValue(ref(db, 'rooms/' + myRoomId + '/players'), (snap) => { const players = snap.val(); if(players) { p1Name=players[1]; p2Name=players[2]; updateUI(); } });
+            
+            // 🌟 수정: 모달 팝업으로 요청 처리
             onValue(ref(db, 'rooms/' + myRoomId + '/undoReq'), (snap) => { 
-                const req = snap.val(); if(!req) return;
+                const req = snap.val(); if(!req) { document.getElementById('req-modal').style.display='none'; return; }
                 if(req.status==='rejected' && req.requester===myPlayerNum) { alert("무르기 거절됨"); set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null); }
-                if(req.status==='pending' && req.requester!==myPlayerNum && !isSpectator) { if(confirm("상대방 무르기 요청. 승낙?")) { logic.undo(); logic.undo(); set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize()); set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null); } else update(ref(db, 'rooms/' + myRoomId + '/undoReq'), {status:'rejected'}); }
+                if(req.status==='pending' && req.requester!==myPlayerNum && !isSpectator) { 
+                    showReqModal("상대방이 무르기를 요청했습니다.", () => {
+                        logic.undo(); logic.undo(); 
+                        set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize()); 
+                        set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null);
+                    }, () => {
+                        update(ref(db, 'rooms/' + myRoomId + '/undoReq'), {status:'rejected'});
+                    });
+                }
             });
             onValue(ref(db, 'rooms/' + myRoomId + '/hintReq'), (snap) => { 
-                const req = snap.val(); if(!req) return;
+                const req = snap.val(); if(!req) { document.getElementById('req-modal').style.display='none'; return; }
                 if(req.status==='granted' && req.requester===myPlayerNum) { alert("힌트 허용됨!"); set(ref(db, 'rooms/' + myRoomId + '/hintReq'), null); window.actuallyShowHint(); }
                 if(req.status==='rejected' && req.requester===myPlayerNum) { alert("힌트 거절됨"); set(ref(db, 'rooms/' + myRoomId + '/hintReq'), null); }
-                if(req.status==='pending' && req.requester!==myPlayerNum && !isSpectator) { if(confirm("상대방 AI 힌트 요청. 허용?")) update(ref(db, 'rooms/' + myRoomId + '/hintReq'), {status:'granted'}); else update(ref(db, 'rooms/' + myRoomId + '/hintReq'), {status:'rejected'}); }
+                if(req.status==='pending' && req.requester!==myPlayerNum && !isSpectator) { 
+                    showReqModal(`상대방(${req.requester===1?p1Name:p2Name})이 AI 힌트를 요청했습니다.`, () => {
+                        update(ref(db, 'rooms/' + myRoomId + '/hintReq'), {status:'granted'});
+                    }, () => {
+                        update(ref(db, 'rooms/' + myRoomId + '/hintReq'), {status:'rejected'});
+                    });
+                }
             });
             onValue(ref(db, 'rooms/' + myRoomId + '/gameReq'), (snap) => {
                 const req = snap.val(); if(!req) return;
@@ -597,11 +761,18 @@
             });
         }
 
-        // 🌟 기권 버튼 로직
+        // 🌟 요청 모달 표시 함수
+        function showReqModal(msg, onYes, onNo) {
+            document.getElementById('req-msg').innerText = msg;
+            document.getElementById('btn-req-yes').onclick = () => { onYes(); document.getElementById('req-modal').style.display='none'; };
+            document.getElementById('btn-req-no').onclick = () => { onNo(); document.getElementById('req-modal').style.display='none'; };
+            document.getElementById('req-modal').style.display='flex';
+        }
+
         window.resign = () => {
             if(!isOnline || isSpectator || logic.winner !== 0) return;
             if(confirm("정말 기권하시겠습니까? (상대방의 승리로 기록됩니다)")) {
-                logic.winner = (myPlayerNum === 1) ? 2 : 1; // 상대방 승리
+                logic.winner = (myPlayerNum === 1) ? 2 : 1; 
                 set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize());
             }
         };
