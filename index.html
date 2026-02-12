@@ -5,7 +5,6 @@
     <title>대학전쟁: 블록 오목 (Legendary AI)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        /* ... (스타일은 기존과 동일) ... */
         body { margin: 0; overflow: hidden; background: #dfe4ea; font-family: 'Pretendard', sans-serif; user-select: none; -webkit-touch-callout: none; }
         #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh; z-index: 1; touch-action: none; }
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh; z-index: 10; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
@@ -14,7 +13,12 @@
         .row-upper { display: flex; justify-content: space-between; align-items: center; width: 100%; }
         .row-lower { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 5px; }
         .title-row { display: flex; align-items: center; gap: 8px; font-size: 1.1rem; }
-        .score-box { font-weight: bold; font-size: 1rem; }
+        
+        /* 점수 및 닉네임 박스 수정 */
+        .score-box { font-weight: bold; font-size: 0.95rem; display: flex; gap: 10px; align-items: center; }
+        .player-info { display: flex; flex-direction: column; line-height: 1.2; }
+        .p-name { font-size: 0.8rem; opacity: 0.8; }
+        .p-score { font-size: 1.1rem; }
         .p1 { color: #e74c3c; } .p2 { color: #2ecc71; } 
         
         .btn { background: #fff; border: 1px solid #ccc; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s; }
@@ -39,14 +43,20 @@
         
         #lobby-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); z-index: 200; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: auto; }
         .lobby-box { text-align: center; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); width: 85%; max-width: 400px; }
-        .lobby-title { font-size: 2rem; font-weight: bold; margin-bottom: 30px; color: #2c3e50; }
-        .lobby-btn { width: 100%; padding: 15px; margin: 10px 0; font-size: 1.1rem; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; color: white; transition: transform 0.1s; }
+        .lobby-title { font-size: 2rem; font-weight: bold; margin-bottom: 20px; color: #2c3e50; }
+        .lobby-btn { width: 100%; padding: 15px; margin: 8px 0; font-size: 1.1rem; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; color: white; transition: transform 0.1s; }
         .btn-single { background: #9b59b6; } .btn-create { background: #3498db; } .btn-join { background: #2ecc71; }
-        .lobby-input { width: 100%; padding: 12px; margin: 10px 0; font-size: 1.2rem; border: 2px solid #ddd; border-radius: 10px; box-sizing: border-box; text-align: center; letter-spacing: 2px; text-transform: uppercase; }
+        .lobby-input { width: 100%; padding: 12px; margin: 8px 0; font-size: 1.1rem; border: 2px solid #ddd; border-radius: 10px; box-sizing: border-box; text-align: center; }
+        .code-input { letter-spacing: 2px; text-transform: uppercase; }
         
         #ai-loader { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 15px 30px; border-radius: 30px; font-weight: bold; font-size: 1.2rem; z-index: 50; pointer-events: none; backdrop-filter: blur(5px); }
-        #my-player-badge { font-size: 0.9rem; font-weight: bold; padding: 6px 12px; border-radius: 20px; display: inline-block; }
+        #my-player-badge { font-size: 0.9rem; font-weight: bold; padding: 6px 12px; border-radius: 20px; display: inline-block; color: white; }
         
+        /* 승률 분석 바 */
+        #win-rate-bar-container { position: absolute; top: 110px; right: 10px; width: 10px; height: 150px; background: #eee; border-radius: 5px; overflow: hidden; border: 1px solid #ccc; z-index: 5; pointer-events: none; }
+        #win-rate-fill { width: 100%; height: 50%; background: #2c3e50; transition: height 1s ease-in-out; position: absolute; bottom: 0; }
+        #win-rate-text { position: absolute; top: 90px; right: 25px; font-size: 0.8rem; font-weight: bold; color: #333; text-align: right; width: 100px; text-shadow: 1px 1px 0 white; }
+
         .modal-overlay { pointer-events: auto; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 300; }
         .modal-content { background: white; width: 85%; max-width: 500px; max-height: 85%; border-radius: 12px; padding: 25px; overflow-y: auto; position: relative; }
         .close-btn { position: absolute; top: 15px; right: 20px; font-size: 1.5rem; cursor: pointer; color: #888; }
@@ -58,19 +68,21 @@
 <body>
     <div id="lobby-overlay">
         <div class="lobby-box">
-            <div class="lobby-title">🎲 블록 오목 <span style="font-size:1rem; color:#e74c3c;">(Legendary AI)</span></div>
+            <div class="lobby-title">🎲 블록 오목</div>
             
             <div id="lobby-main">
+                <input type="text" id="nickname-input" class="lobby-input" placeholder="닉네임 (최대 6자)" maxlength="6" value="Player">
+                
                 <button class="lobby-btn btn-single" onclick="showSideSelection()">👤 AI와 대결 (싱글)</button>
-                <div style="margin: 20px 0; border-top: 1px solid #eee;"></div>
-                <div style="font-size:0.9rem; color:#666; margin-bottom:10px;">온라인 멀티플레이</div>
+                <div style="margin: 15px 0; border-top: 1px solid #eee;"></div>
+                <div style="font-size:0.9rem; color:#666; margin-bottom:5px;">온라인 멀티플레이</div>
                 <button class="lobby-btn btn-create" onclick="createRoom()">방 만들기 (Host)</button>
-                <div style="margin: 10px 0; color: #888; font-size:0.8rem;">- 또는 -</div>
-                <input type="text" id="room-code-input" class="lobby-input" placeholder="코드 6자리 (영문+숫자)" maxlength="6">
+                <div style="margin: 5px 0; color: #888; font-size:0.8rem;">- 또는 -</div>
+                <input type="text" id="room-code-input" class="lobby-input code-input" placeholder="코드 6자리" maxlength="6">
                 <button class="lobby-btn btn-join" onclick="joinRoom()">방 참가하기 (Join)</button>
 
                 <div class="ai-status-box">
-                    <span id="ai-status-text">⏳ AI 파일 찾는 중...</span>
+                    <span id="ai-status-text">⏳ AI 엔진 로딩 중...</span>
                     <label for="ai-file-input" class="manual-upload">[수동 업로드]</label>
                     <input type="file" id="ai-file-input" accept=".json" style="display:none;" onchange="loadCustomAI(this)">
                 </div>
@@ -95,16 +107,32 @@
     <div id="game-canvas"></div>
     <div id="ai-loader">🤖 AI 생각중...</div>
 
+    <div id="win-rate-bar-container">
+        <div id="win-rate-fill"></div>
+    </div>
+    <div id="win-rate-text">흑 승률: 50%</div>
+
     <div id="ui-layer" style="display:none;">
         <div class="top-bar">
             <div class="row-upper">
                 <div class="game-info">
                     <div class="title-row"> <span style="font-weight:bold;">BLOCK OMOK</span> <span id="game-phase" class="phase-badge">착수</span> </div>
-                    <div class="score-box"> <span class="p1">흑: <span id="p1-cnt">4</span></span> <span style="margin:0 5px; color:#ccc">|</span> <span class="p2">백: <span id="p2-cnt">4</span></span> <span id="turn-indicator" style="font-size:0.9rem; margin-left:5px; color:#e74c3c;">(흑 차례)</span> </div>
+                    <div class="score-box"> 
+                        <div class="player-info p1">
+                            <span class="p-name" id="name-p1">흑</span>
+                            <span class="p-score">블록: <span id="p1-cnt">4</span></span>
+                        </div>
+                        <span style="margin:0 5px; color:#ccc">|</span>
+                        <div class="player-info p2">
+                            <span class="p-name" id="name-p2">백</span>
+                            <span class="p-score">블록: <span id="p2-cnt">4</span></span>
+                        </div>
+                        <span id="turn-indicator" style="font-size:0.9rem; margin-left:10px; color:#e74c3c; white-space:nowrap;">(흑 차례)</span> 
+                    </div>
                 </div>
                 <div class="btn-group"> 
                     <button class="btn" id="btn-undo" onclick="window.requestUndo()">↩️ 무르기</button> 
-                    <button class="btn" onclick="window.resetGame()">🔄 초기화</button> 
+                    <button class="btn" id="btn-reset" onclick="window.resetGame()">🔄 초기화</button> 
                 </div>
             </div>
             <div class="row-lower">
@@ -161,7 +189,6 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-        // Firebase Config (본인의 프로젝트 키로 반드시 교체하세요!)
         const firebaseConfig = {
             apiKey: "AIzaSyC6I8D1aazjTGBJdwQ1iHsQYyHXWHf3_PU",
             authDomain: "omok-game-95008.firebaseapp.com",
@@ -178,217 +205,118 @@
         let myRoomId = null;
         let myPlayerNum = 0; 
         let isOnline = false;
+        let isSpectator = false;
+        let myNickname = "Player";
         let neuralWeights = null;
+        let p1Name = "흑", p2Name = "백";
 
-        // ... (이하 로직은 제공해주신 코드 그대로 사용) ...
-        // ... (NeuralAI, MCTSAI, GameLogic, Three.js 렌더링 등 포함) ...
-        // ... (autoLoadAI() 실행 포함) ...
-        
-        // [코드 생략: 제공해주신 전체 코드를 여기에 붙여넣으세요. 변경 사항이 잘 반영되어 있습니다.]
-        
-        // (NeuralAI 클래스 정의)
-        // (NeuralAI 클래스 수정본: 높이 계산 및 이동 단계 예외 처리 추가)
-        // [수정됨] PyTorch 가중치 구조에 맞춘 NeuralAI
+        // ------------------------------------------------------------------
+        // [클래스 정의: NeuralAI, MCTSAI, GameLogic]
+        // ------------------------------------------------------------------
         class NeuralAI {
-            constructor(weights) { 
-                this.weights = weights; 
-                this.ready = true; 
-            }
-
+            constructor(weights) { this.weights = weights; this.ready = true; }
             getBestMove(logic, player) {
-                // 이동 단계(MOVEMENT)거나 블록이 없으면 MCTS에게 위임
                 if (logic.phase === 'MOVEMENT' || logic.blocksLeft[player] <= 0) return null;
-
-                const validActions = [];
-                const actionToMove = {};
-                
-                // 0~199번 모든 행동 탐색
+                const validActions = []; const actionToMove = {};
                 for(let i=0; i<200; i++) {
-                    const sh = i % 8; 
-                    const px = Math.floor(i / 8) % 5; 
-                    const py = Math.floor(Math.floor(i / 8) / 5); 
-                    
-                    // [중력 로직 유지] AI가 1층만 학습했더라도, 실제 게임에선 위로 쌓을 수 있게 보정
-                    let baseCells = getCellsFromBase(px, py, sh);
-                    let validZFound = false;
-                    let finalCells = null;
-
+                    const sh = i % 8; const px = Math.floor(i / 8) % 5; const py = Math.floor(Math.floor(i / 8) / 5); 
+                    let baseCells = getCellsFromBase(px, py, sh); let validZFound = false; let finalCells = null;
                     for (let dz = 0; dz < 5; dz++) {
                         const testCells = baseCells.map(c => ({ x: c.x, y: c.y, z: c.z + dz }));
                         if (testCells.some(c => c.z > 4)) break;
-                        
                         const check = logic.checkValidity(player, testCells);
-                        if (check.ok) {
-                            finalCells = testCells;
-                            validZFound = true;
-                            break; 
-                        }
+                        if (check.ok) { finalCells = testCells; validZFound = true; break; }
                     }
-
-                    if (validZFound && finalCells) {
-                        validActions.push(i);
-                        actionToMove[i] = { type: 'place', cells: finalCells, shapeIdx: sh };
-                    }
+                    if (validZFound && finalCells) { validActions.push(i); actionToMove[i] = { type: 'place', cells: finalCells, shapeIdx: sh }; }
                 }
-
                 if (validActions.length === 0) return null;
-
-                // [입력 데이터 생성] 순서: Z(0->4) -> Y(0->4) -> X(0->4) (파이썬 flatten 순서와 일치시킴)
-                const obs = [];
-                const opp = player === 1 ? 2 : 1;
-                // 내 돌 (125개)
+                const obs = []; const opp = player === 1 ? 2 : 1;
                 for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) obs.push(logic.board[z][y][x] === player ? 1 : 0);
-                // 상대 돌 (125개)
                 for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) obs.push(logic.board[z][y][x] === opp ? 1 : 0);
-
-                // [신경망 연산] PyTorch 가중치 형태([Out][In])에 맞춰 matMul 수정됨
-                // PPO의 기본 활성화 함수는 Tanh입니다.
                 let h1 = this.matMul(obs, this.weights.fc0_w, this.weights.fc0_b).map(x => Math.tanh(x));
                 let h2 = this.matMul(h1, this.weights.fc1_w, this.weights.fc1_b).map(x => Math.tanh(x));
-                const logits = this.matMul(h2, this.weights.fc2_w, this.weights.fc2_b); // 마지막은 활성화 함수 없음
-
-                let bestIdx = -1;
-                let maxVal = -Infinity;
-                
-                // 유효한 수 중에서 가장 확률(logit)이 높은 수 선택
-                for (let idx of validActions) {
-                    if (logits[idx] > maxVal) { maxVal = logits[idx]; bestIdx = idx; }
-                }
+                const logits = this.matMul(h2, this.weights.fc2_w, this.weights.fc2_b);
+                let bestIdx = -1; let maxVal = -Infinity;
+                for (let idx of validActions) { if (logits[idx] > maxVal) { maxVal = logits[idx]; bestIdx = idx; } }
                 return bestIdx !== -1 ? actionToMove[bestIdx] : null;
             }
-            
-            // [중요 수정] PyTorch Linear 레이어 (y = xA^T + b) 연산 구현
-            // w는 [output_dim][input_dim] 형태입니다.
             matMul(input, w, b) {
                 const output = new Array(b.length).fill(0);
-                for (let j = 0; j < b.length; j++) { // j: Output Neuron Index
-                    let sum = b[j];
-                    for (let i = 0; i < input.length; i++) { // i: Input Index
-                        // w[j][i]로 접근해야 함 (이전 코드는 w[i][j]였음 -> 오류 원인)
-                        sum += input[i] * w[j][i];
-                    }
-                    output[j] = sum;
-                }
+                for (let j = 0; j < b.length; j++) { let sum = b[j]; for (let i = 0; i < input.length; i++) { sum += input[i] * w[j][i]; } output[j] = sum; }
                 return output;
             }
         }
 
-        // (MCTSAI 클래스 정의 - 킬러 본능 포함)
-        // (MCTSAI 클래스 - 업그레이드 버전: 스마트 시뮬레이션 탑재)
-        // 📊 [성능 분석용] MCTSAI (Profiler 탑재)
-        // 🧠 [지능 100% 복구 + 렉 제거] MCTSAI (똑똑하고 부드러운 버전)
-        // 🧬 [Neural + MCTS + Visual + Anti-Lag] 최종 완성 엔진
         class MCTSAI {
             constructor() { this.ready = true; }
-            
             async getBestMove(logic, player, iterations = 1500, onThinkingCallback = null) {
-                // 1. 유효수 계산
                 const validMoves = getAllValidMoves(logic, player);
                 if (validMoves.length === 0) return null;
 
-                // ----------------------------------------------------------------
-                // 🛑 [1순위] 절대 방어 & 킬각 (가장 중요)
-                // ----------------------------------------------------------------
-                // 1-1. 킬각 (내가 이기는 수)
-                for (let move of validMoves) {
-                    if (this.simulateOneMove(logic, player, move) === player) {
-                        console.log("⚡ 킬각 발견! (즉시 승리)");
-                        return move;
-                    }
-                }
-                // 1-2. 방어 (상대가 이기는 수 막기)
+                // 1. 킬각 & 방어
+                for (let move of validMoves) if (this.simulateOneMove(logic, player, move) === player) return move;
                 const opponent = player === 1 ? 2 : 1;
                 const myState = logic.clone();
                 const oppMoves = getAllValidMoves(myState, opponent);
                 const threatMoves = [];
-                for (let opMove of oppMoves) {
-                    if (this.simulateOneMove(myState, opponent, opMove) === opponent) threatMoves.push(opMove);
-                }
+                for (let opMove of oppMoves) if (this.simulateOneMove(myState, opponent, opMove) === opponent) threatMoves.push(opMove);
                 if (threatMoves.length > 0) {
-                    console.log(`🛡️ 긴급 방어 발동! (위협 ${threatMoves.length}개)`);
                     for (let myMove of validMoves) {
-                        const testState = logic.clone();
-                        this.applyMove(testState, player, myMove);
-                        let safe = true;
-                        const nextOppMoves = getAllValidMoves(testState, opponent);
-                        for (let nom of nextOppMoves) {
-                            if (this.simulateOneMove(testState, opponent, nom) === opponent) {
-                                safe = false; break;
-                            }
-                        }
-                        if (safe) return myMove; // 방어 성공하면 즉시 리턴
+                        const testState = logic.clone(); this.applyMove(testState, player, myMove);
+                        let safe = true; const nextOppMoves = getAllValidMoves(testState, opponent);
+                        for (let nom of nextOppMoves) if (this.simulateOneMove(testState, opponent, nom) === opponent) { safe = false; break; }
+                        if (safe) return myMove;
                     }
                 }
 
-                // ----------------------------------------------------------------
-                // 🧠 [2순위] 신경망 (Legendary AI) 가동!
-                // ----------------------------------------------------------------
-                // 신경망 데이터가 있고, 아직 이동 단계가 아니라면 신경망에게 물어봄
+                // 2. 신경망
                 if (neuralWeights && logic.phase !== 'MOVEMENT') {
-                    try {
-                        const brain = new NeuralAI(neuralWeights); // 아까 수정한 NeuralAI 사용
-                        const neuralMove = brain.getBestMove(logic, player);
-                        
-                        if (neuralMove) {
-                            console.log("🧠 Legendary AI의 선택 (신경망)");
-                            
-                            // 시각화: 신경망이 고른 자리를 잠깐(0.5초) 보여줌
-                            if (onThinkingCallback) onThinkingCallback(neuralMove);
-                            await new Promise(r => setTimeout(r, 500)); 
-
-                            return neuralMove;
-                        }
-                    } catch (e) {
-                        console.error("신경망 오류 (MCTS로 전환):", e);
-                    }
+                    try { const brain = new NeuralAI(neuralWeights); const neuralMove = brain.getBestMove(logic, player); 
+                    if (neuralMove) { if (onThinkingCallback) onThinkingCallback(neuralMove); await new Promise(r => setTimeout(r, 500)); return neuralMove; }
+                    } catch (e) { console.error(e); }
                 }
 
-                // ----------------------------------------------------------------
-                // 🌲 [3순위] MCTS (이동 단계 or 신경망이 모를 때)
-                // ----------------------------------------------------------------
-                console.log("🌲 MCTS 정밀 탐색 시작 (시각화 ON)");
-                
+                // 3. MCTS
                 const root = { state: logic.clone(), player: player, parent: null, children: [], visits: 0, wins: 0, move: null };
-                const start = Date.now();
-                let lastYield = Date.now();
-                const timeLimit = 2000; // 2초 생각
-
+                const start = Date.now(); let lastYield = Date.now(); const timeLimit = 2000;
                 while ((Date.now() - start < timeLimit) || iterations > 0) {
-                    // 30ms마다 화면 갱신 (렉 제거)
                     if (Date.now() - lastYield > 30) {
-                        let currentBestNode = null;
-                        let maxV = -1;
-                        // 현재까지 가장 유력한 후보를 시각화
-                        if(root.children.length > 0) {
-                            for(let c of root.children) if(c.visits > maxV) { maxV = c.visits; currentBestNode = c; }
-                        }
-
-                        if (onThinkingCallback && currentBestNode && currentBestNode.move) {
-                            onThinkingCallback(currentBestNode.move);
-                        }
-                        await new Promise(r => setTimeout(r, 0));
-                        lastYield = Date.now();
+                        let currentBestNode = null; let maxV = -1;
+                        if(root.children.length > 0) for(let c of root.children) if(c.visits > maxV) { maxV = c.visits; currentBestNode = c; }
+                        if (onThinkingCallback && currentBestNode && currentBestNode.move) onThinkingCallback(currentBestNode.move);
+                        await new Promise(r => setTimeout(r, 0)); lastYield = Date.now();
                     }
-
                     let node = this.select(root);
                     if (!node.state.winner && node.visits > 0) node = this.expand(node);
-                    
-                    // 진지한 시뮬레이션 (Heavy)
                     const winner = this.simulateHeavy(node.state, node.player);
-                    
                     this.backpropagate(node, winner);
-                    iterations--;
-                    if (Date.now() - start > 5000) break; // 5초 안전장치
+                    iterations--; if (Date.now() - start > 5000) break;
                 }
-
                 let bestChild = null; let maxVisits = -1;
-                for (const child of root.children) {
-                    if (child.visits > maxVisits) { maxVisits = child.visits; bestChild = child; }
-                }
+                for (const child of root.children) { if (child.visits > maxVisits) { maxVisits = child.visits; bestChild = child; } }
                 return bestChild ? bestChild.move : validMoves[0];
             }
 
-            // ... (아래 함수들은 기존 그대로 유지) ...
+            // 승률 분석용 빠른 MCTS
+            getWinRate(logic, player, iterations = 500) {
+                const root = { state: logic.clone(), player: player, parent: null, children: [], visits: 0, wins: 0, move: null };
+                const start = Date.now();
+                while (iterations > 0 && Date.now() - start < 500) {
+                    let node = this.select(root);
+                    if (!node.state.winner && node.visits > 0) node = this.expand(node);
+                    const winner = this.simulateHeavy(node.state, node.player); // simulateHeavy 재활용
+                    this.backpropagate(node, winner);
+                    iterations--;
+                }
+                // 루트 노드의 승률 (내 승리 횟수 / 전체 방문)
+                // 현재 플레이어 기준 승률
+                if (root.visits === 0) return 50;
+                let rate = (root.wins / root.visits) * 100;
+                // MCTS는 '현재 착수하는 사람'이 이길 확률을 구함.
+                // 만약 player가 1이면 흑 승률, 2면 백 승률
+                return Math.max(0, Math.min(100, rate));
+            }
+
             select(node) {
                 while (node.children.length > 0) {
                     node = node.children.reduce((best, child) => {
@@ -402,8 +330,7 @@
             expand(node) {
                 const moves = getAllValidMoves(node.state, node.player);
                 for (const move of moves) {
-                    const newState = node.state.clone();
-                    this.applyMove(newState, node.player, move);
+                    const newState = node.state.clone(); this.applyMove(newState, node.player, move);
                     node.children.push({ state: newState, player: newState.currentPlayer, parent: node, children: [], visits: 0, wins: 0, move: move });
                 }
                 return node.children.length > 0 ? node.children[Math.floor(Math.random() * node.children.length)] : node;
@@ -411,10 +338,7 @@
             backpropagate(node, winner) {
                 while (node) {
                     node.visits++;
-                    if (winner !== 0) { 
-                        if (node.parent && node.parent.player === winner) node.wins++; 
-                        else if (node.parent && node.parent.player !== winner) node.wins -= 10; 
-                    }
+                    if (winner !== 0) { if (node.parent && node.parent.player === winner) node.wins++; else if (node.parent && node.parent.player !== winner) node.wins -= 10; }
                     node = node.parent;
                 }
             }
@@ -428,23 +352,15 @@
                     else if (state.blocksLeft[state.currentPlayer]===0 && state.phase==='PLACEMENT') state.phase='MOVEMENT';
                 }
             }
-            simulateOneMove(logic, player, move) {
-                const tempState = logic.clone();
-                this.applyMove(tempState, player, move);
-                return tempState.winner;
-            }
+            simulateOneMove(logic, player, move) { const tempState = logic.clone(); this.applyMove(tempState, player, move); return tempState.winner; }
             simulateHeavy(state, player) {
-                let tempState = state.clone();
-                let depth = 0;
+                let tempState = state.clone(); let depth = 0;
                 while (tempState.winner === 0 && depth < 30) {
                     const currentPlayer = tempState.currentPlayer;
                     const moves = getAllValidMoves(tempState, currentPlayer);
                     if (moves.length === 0) break;
                     let chosenMove = null;
-                    for (let i = 0; i < moves.length; i++) {
-                        if (moves.length > 20 && i > 10 && Math.random() > 0.3) continue; 
-                        if (this.simulateOneMove(tempState, currentPlayer, moves[i]) === currentPlayer) { chosenMove = moves[i]; break; }
-                    }
+                    for (let i = 0; i < moves.length; i++) { if (moves.length > 20 && i > 10 && Math.random() > 0.3) continue; if (this.simulateOneMove(tempState, currentPlayer, moves[i]) === currentPlayer) { chosenMove = moves[i]; break; } }
                     if (!chosenMove) chosenMove = moves[Math.floor(Math.random() * moves.length)];
                     this.applyMove(tempState, currentPlayer, chosenMove);
                     depth++;
@@ -460,12 +376,8 @@
             [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:0,y:1,z:1}], [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:0,y:-1,z:1}]
         ];
 
-        function getCellsFromBase(bx, by, shapeIdx) {
-            const shape = SHAPES[shapeIdx];
-            return shape.map(d => ({x: bx + d.x, y: by + d.y, z: d.z}));
-        }
+        function getCellsFromBase(bx, by, shapeIdx) { const shape = SHAPES[shapeIdx]; return shape.map(d => ({x: bx + d.x, y: by + d.y, z: d.z})); }
 
-        // ... (GameLogic 클래스: 기존 코드와 동일) ...
         class GameLogic {
             constructor() { this.reset(); }
             reset() {
@@ -491,10 +403,8 @@
             removeBlock(blockId) {
                 const idx = this.blocks.findIndex(b => b.id === blockId);
                 if (idx > -1) {
-                    const block = this.blocks[idx];
-                    block.cells.forEach(c => this.board[c.z][c.y][c.x] = 0);
-                    this.blocks.splice(idx, 1);
-                    return block;
+                    const block = this.blocks[idx]; block.cells.forEach(c => this.board[c.z][c.y][c.x] = 0);
+                    this.blocks.splice(idx, 1); return block;
                 }
                 return null;
             }
@@ -502,10 +412,7 @@
                 if (block.isFixed) return false;
                 for (let c of block.cells) {
                     if (c.z >= 4) continue;
-                    if (this.board[c.z+1][c.y][c.x] !== 0) {
-                        const isSelf = block.cells.some(sc => sc.x===c.x && sc.y===c.y && sc.z===c.z+1);
-                        if (!isSelf) return false;
-                    }
+                    if (this.board[c.z+1][c.y][c.x] !== 0) { const isSelf = block.cells.some(sc => sc.x===c.x && sc.y===c.y && sc.z===c.z+1); if (!isSelf) return false; }
                 }
                 return true;
             }
@@ -515,58 +422,37 @@
                 if (!this.canPick(block)) return { ok: false, msg: "불가: 위에 블록 있음" };
                 this.saveState();
                 this.selectedBlockOriginalCells = JSON.parse(JSON.stringify(block.cells));
-                this.removeBlock(block.id);
-                this.selectedBlock = block;
+                this.removeBlock(block.id); this.selectedBlock = block;
                 return { ok: true, block: block };
             }
             checkValidity(player, cells, isMovement=false, originalCells=null) {
                 if (this.winner !== 0) return { ok: false, msg: "게임 종료됨" };
                 const origin = originalCells || (isMovement && this.selectedBlockOriginalCells ? this.selectedBlockOriginalCells : null);
                 if (isMovement && origin) {
-                    const cSet = new Set(cells.map(c=>`${c.x},${c.y},${c.z}`));
-                    const oSet = new Set(origin.map(c=>`${c.x},${c.y},${c.z}`));
-                    if (cSet.size === oSet.size) {
-                        let same = true; 
-                        for(let k of cSet) if(!oSet.has(k)) { same=false; break; }
-                        if(same) return { ok:false, msg:"제자리 불가" };
-                    }
+                    const cSet = new Set(cells.map(c=>`${c.x},${c.y},${c.z}`)); const oSet = new Set(origin.map(c=>`${c.x},${c.y},${c.z}`));
+                    if (cSet.size === oSet.size) { let same = true; for(let k of cSet) if(!oSet.has(k)) { same=false; break; } if(same) return { ok:false, msg:"제자리 불가" }; }
                 }
-                for(let c of cells) {
-                    if(c.x<0||c.x>4||c.y<0||c.y>4||c.z<0||c.z>4) return {ok:false, msg:"범위 초과"};
-                    if(this.board[c.z][c.y][c.x]!==0) return {ok:false, msg:"이미 있음"};
-                }
-                if (!isMovement && this.turnCount < 2) {
-                    const restricted = ["0,3","0,4","1,4","3,0","4,0","4,1"];
-                    if(cells.some(c=>c.z===0 && restricted.includes(`${c.x},${c.y}`))) return {ok:false, msg:"금지 구역"};
-                }
+                for(let c of cells) { if(c.x<0||c.x>4||c.y<0||c.y>4||c.z<0||c.z>4) return {ok:false, msg:"범위 초과"}; if(this.board[c.z][c.y][c.x]!==0) return {ok:false, msg:"이미 있음"}; }
+                if (!isMovement && this.turnCount < 2) { const restricted = ["0,3","0,4","1,4","3,0","4,0","4,1"]; if(cells.some(c=>c.z===0 && restricted.includes(`${c.x},${c.y}`))) return {ok:false, msg:"금지 구역"}; }
                 if ([1,3].indexOf(cells.filter(c=>c.z===0).length) === -1) return {ok:false, msg:"접지 위반"};
-                for(let c of cells) {
-                    if(c.z>0) {
-                        const hasSup = this.board[c.z-1][c.y][c.x]!==0;
-                        const isSelf = cells.some(sc=>sc.x===c.x && sc.y===c.y && sc.z===c.z-1);
-                        if(!hasSup && !isSelf) return {ok:false, msg:"지지대 필요"};
-                    }
-                }
+                for(let c of cells) { if(c.z>0) { const hasSup = this.board[c.z-1][c.y][c.x]!==0; const isSelf = cells.some(sc=>sc.x===c.x && sc.y===c.y && sc.z===c.z-1); if(!hasSup && !isSelf) return {ok:false, msg:"지지대 필요"}; } }
                 return {ok:true};
             }
             confirmMove(cells, shapeIdx) {
                 if (this.phase === 'PLACEMENT') {
                     if(!isOnline) this.saveState();
-                    this.addBlock(this.currentPlayer, cells, shapeIdx);
-                    this.blocksLeft[this.currentPlayer]--;
+                    this.addBlock(this.currentPlayer, cells, shapeIdx); this.blocksLeft[this.currentPlayer]--;
                 } else {
-                    this.addBlock(this.currentPlayer, cells, shapeIdx);
-                    this.selectedBlock = null; this.selectedBlockOriginalCells = null;
+                    this.addBlock(this.currentPlayer, cells, shapeIdx); this.selectedBlock = null; this.selectedBlockOriginalCells = null;
                 }
                 this.winner = this.checkWin();
                 if (this.winner === 0) {
-                    this.turnCount++;
-                    this.currentPlayer = this.currentPlayer===1 ? 2:1;
+                    this.turnCount++; this.currentPlayer = this.currentPlayer===1 ? 2:1;
                     if (this.blocksLeft[1] === 0 && this.blocksLeft[2] === 0) this.phase = 'MOVEMENT';
                     else if (this.blocksLeft[this.currentPlayer] === 0 && this.phase === 'PLACEMENT') this.phase = 'MOVEMENT';
                     if(!isOnline && this.aiMode && this.currentPlayer !== myPlayerNum) runAI();
                 }
-                sendMove();
+                sendMove(); updateWinRateUI(); // 승률 갱신
                 return this.winner;
             }
             checkWin() {
@@ -575,13 +461,7 @@
                 const dirs = [{dx:1, dy:0}, {dx:0, dy:1}, {dx:1, dy:1}, {dx:1, dy:-1}];
                 for(let y=0; y<5; y++) for(let x=0; x<5; x++) {
                     let c = topMap[y][x]; if(c===0) continue;
-                    for(let d of dirs) {
-                        let cnt=1; for(let k=1; k<5; k++) {
-                            let nx=x+d.dx*k, ny=y+d.dy*k;
-                            if(nx>=0&&nx<5&&ny>=0&&ny<5&&topMap[ny][nx]===c) cnt++; else break;
-                        }
-                        if(cnt===5) return c;
-                    }
+                    for(let d of dirs) { let cnt=1; for(let k=1; k<5; k++) { let nx=x+d.dx*k, ny=y+d.dy*k; if(nx>=0&&nx<5&&ny>=0&&ny<5&&topMap[ny][nx]===c) cnt++; else break; } if(cnt===5) return c; }
                 }
                 return 0;
             }
@@ -589,50 +469,28 @@
             undo() { if(this.history.length===0) return false; const s = this.history.pop(); Object.assign(this, s); this.selectedBlock=null; this.selectedBlockOriginalCells=null; return true; }
         }
 
-        // ... (나머지 getAllValidMoves, main setup 등) ...
-        // [코드 생략: getAllValidMoves부터 끝까지 기존과 동일. 단, autoLoadAI 함수가 추가됨]
-        // 모든 유효한 수를 찾는 함수 (MCTS 및 이동 단계용 필수 함수)
         function getAllValidMoves(logic, player) {
             const moves = [];
-            
-            // 1. 착수 단계 (Placement)
             if (logic.phase === 'PLACEMENT') {
                 if (logic.blocksLeft[player] > 0) {
-                    // 보드의 모든 위치(x,y)와 모든 모양(sh)에 대해 탐색
                     for (let sh = 0; sh < 8; sh++) {
                         for (let y = 0; y < 5; y++) {
                             for (let x = 0; x < 5; x++) {
-                                // NeuralAI와 마찬가지로 바닥부터 위로 훑으며 가능한 곳 찾기
                                 let baseCells = getCellsFromBase(x, y, sh);
                                 for (let dz = 0; dz < 5; dz++) {
                                     const testCells = baseCells.map(c => ({ x: c.x, y: c.y, z: c.z + dz }));
                                     if (testCells.some(c => c.z > 4)) break;
-                                    
-                                    if (logic.checkValidity(player, testCells).ok) {
-                                        moves.push({ type: 'place', cells: testCells, shapeIdx: sh });
-                                        break; // 중력 규칙: 해당 x,y,shape 조합에서는 가장 낮은 곳만 유효하다고 가정
-                                    }
+                                    if (logic.checkValidity(player, testCells).ok) { moves.push({ type: 'place', cells: testCells, shapeIdx: sh }); break; }
                                 }
                             }
                         }
                     }
                 }
-            } 
-            // 2. 이동 단계 (Movement)
-            else if (logic.phase === 'MOVEMENT') {
-                // 내 블록들을 찾음
+            } else if (logic.phase === 'MOVEMENT') {
                 const myBlocks = logic.blocks.filter(b => b.player === player && !b.isFixed);
-                
                 for (const block of myBlocks) {
-                    // 이 블록을 들어올릴 수 있는지 확인 (위에 다른 블록이 없어야 함)
                     if (!logic.canPick(block)) continue;
-
-                    // 가상으로 들어올림 (임시 제거)
-                    const tempLogic = logic.clone();
-                    tempLogic.removeBlock(block.id);
-                    tempLogic.selectedBlockOriginalCells = block.cells; // 제자리 금지 확인용
-
-                    // 들어올린 상태에서 모든 위치에 놓아봄
+                    const tempLogic = logic.clone(); tempLogic.removeBlock(block.id); tempLogic.selectedBlockOriginalCells = block.cells;
                     for (let sh = 0; sh < 8; sh++) {
                         for (let y = 0; y < 5; y++) {
                             for (let x = 0; x < 5; x++) {
@@ -640,12 +498,7 @@
                                 for (let dz = 0; dz < 5; dz++) {
                                     const testCells = baseCells.map(c => ({ x: c.x, y: c.y, z: c.z + dz }));
                                     if (testCells.some(c => c.z > 4)) break;
-
-                                    // 이동 규칙(isMovement=true)으로 검사
-                                    if (tempLogic.checkValidity(player, testCells, true, block.cells).ok) {
-                                        moves.push({ type: 'move', fromId: block.id, cells: testCells, shapeIdx: sh });
-                                        break;
-                                    }
+                                    if (tempLogic.checkValidity(player, testCells, true, block.cells).ok) { moves.push({ type: 'move', fromId: block.id, cells: testCells, shapeIdx: sh }); break; }
                                 }
                             }
                         }
@@ -654,12 +507,12 @@
             }
             return moves;
         }
-        const ai = new MCTSAI(); // 이제 MCTS와 Neural이 통합됨
+
+        const ai = new MCTSAI();
         const logic = new GameLogic();
         const logEl = document.getElementById('log-console');
         const aiLoader = document.getElementById('ai-loader');
 
-        // 🔥 [핵심] 자동 로딩 로직 (MCTSAI 클래스 내부에서 사용될 NeuralAI 초기화)
         async function autoLoadAI() {
             try {
                 const res = await fetch('legendary_ai.json');
@@ -668,42 +521,23 @@
                     neuralWeights = weights;
                     document.getElementById('ai-status-text').innerText = "✅ AI 자동 장착 완료! (Neural)";
                     document.getElementById('ai-status-text').style.color = "#2ecc71";
-                    console.log("AI Auto-load Success!");
-                } else {
-                    throw new Error("File not found");
-                }
-            } catch (e) {
-                console.log("Auto-load failed. Waiting for manual upload.");
-            }
+                } else throw new Error("File not found");
+            } catch (e) { console.log("Auto-load failed. Waiting for manual upload."); }
         }
         autoLoadAI();
 
         window.loadCustomAI = (input) => {
-            const file = input.files[0];
-            if(!file) return;
+            const file = input.files[0]; if(!file) return;
             const reader = new FileReader();
             reader.onload = (e) => {
-                try {
-                    neuralWeights = JSON.parse(e.target.result);
-                    document.getElementById('ai-status-text').innerText = "✅ AI 수동 장착 완료!";
-                    document.getElementById('ai-status-text').style.color = "#2ecc71";
-                    alert("AI가 성공적으로 로드되었습니다.");
-                } catch(err) { alert("JSON 파일 오류!"); }
+                try { neuralWeights = JSON.parse(e.target.result); document.getElementById('ai-status-text').innerText = "✅ AI 수동 장착 완료!"; document.getElementById('ai-status-text').style.color = "#2ecc71"; alert("AI가 성공적으로 로드되었습니다."); } catch(err) { alert("JSON 파일 오류!"); }
             };
             reader.readAsText(file);
         };
 
-        function log(msg) { 
-            const div = document.createElement('div'); div.innerText = `> ${msg}`;
-            logEl.insertBefore(div, logEl.firstChild);
-            if(logEl.children.length > 4) logEl.removeChild(logEl.lastChild);
-        }
+        function log(msg) { const div = document.createElement('div'); div.innerText = `> ${msg}`; logEl.insertBefore(div, logEl.firstChild); if(logEl.children.length > 4) logEl.removeChild(logEl.lastChild); }
 
-        // ... (Three.js 및 이벤트 리스너들은 기존과 동일) ...
         const scene = new THREE.Scene(); scene.background = new THREE.Color(0xdfe4ea);
-        // [중략: 나머지 렌더링 로직들]
-        
-        // ... (animate 함수까지 포함하여 마무리는 이전과 동일) ...
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
         camera.position.set(0, 14, 12); camera.lookAt(0,0,0);
         const renderer = new THREE.WebGLRenderer({antialias:true});
@@ -716,25 +550,13 @@
         const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping=true; controls.maxPolarAngle=Math.PI/2;
         
         const boardGroup = new THREE.Group(); scene.add(boardGroup);
-        // [기존 코드]
         const ghostGroup = new THREE.Group(); scene.add(ghostGroup);
         const hintGroup = new THREE.Group(); scene.add(hintGroup);
-
-        // ✅ [새로 추가] AI 고민 표시 그룹 생성
         const thinkingGroup = new THREE.Group(); scene.add(thinkingGroup);
 
-        // ✅ [새로 추가] 고민 흔적 지우기 함수
-        function clearThinkingIndicators() {
-            while(thinkingGroup.children.length > 0) thinkingGroup.remove(thinkingGroup.children[0]);
-        }
+        function clearThinkingIndicators() { while(thinkingGroup.children.length > 0) thinkingGroup.remove(thinkingGroup.children[0]); }
+        function showThinkingIndicator(move) { if (!move || !move.cells) return; drawGhost(move.cells, 0xFFA500, thinkingGroup, 0.4); }
 
-        // ✅ [새로 추가] 고민 흔적 그리기 함수 (반투명 주황색)
-        function showThinkingIndicator(move) {
-            // drawGhost 함수를 재활용합니다. 색상은 주황색(0xFFA500), 투명도는 0.4로 설정
-            if (!move || !move.cells) return;
-            // 착수(place)든 이동(move)이든 최종적으로 놓이는 위치를 표시
-            drawGhost(move.cells, 0xFFA500, thinkingGroup, 0.4);
-        }
         const hitPlane = new THREE.Mesh(new THREE.PlaneGeometry(6,6), new THREE.MeshBasicMaterial({ visible:false, side:THREE.DoubleSide }));
         hitPlane.rotation.x=-Math.PI/2; hitPlane.position.y=0.5; scene.add(hitPlane);
         scene.add(new THREE.GridHelper(5,5, 0xbdc3c7, 0xecf0f1));
@@ -746,7 +568,10 @@
         function updateUI() {
             document.getElementById('p1-cnt').innerText = logic.blocksLeft[1];
             document.getElementById('p2-cnt').innerText = logic.blocksLeft[2];
-            document.getElementById('turn-indicator').innerText = logic.currentPlayer===1?"(흑 차례)":"(백 차례)";
+            document.getElementById('name-p1').innerText = p1Name;
+            document.getElementById('name-p2').innerText = p2Name;
+
+            document.getElementById('turn-indicator').innerText = logic.currentPlayer===1?`(${p1Name} 차례)`:`(${p2Name} 차례)`;
             document.getElementById('turn-indicator').style.color = logic.currentPlayer===1?"#e74c3c":"#2ecc71";
             document.getElementById('game-phase').innerText = logic.phase==='MOVEMENT'?"이동":"착수";
             document.getElementById('game-phase').style.background = logic.phase==='MOVEMENT'?"#e67e22":"#333";
@@ -762,6 +587,34 @@
                 btnUndo.innerText = "↩️ 무르기";
                 btnUndo.onclick = window.undo;
             }
+        }
+
+        // 🌟 [승률 분석 업데이트 함수]
+        function updateWinRateUI() {
+            // 게임 종료 시
+            if (logic.winner !== 0) {
+                const text = logic.winner === 1 ? "흑 승리!" : "백 승리!";
+                const height = logic.winner === 1 ? "100%" : "0%";
+                document.getElementById('win-rate-text').innerText = text;
+                document.getElementById('win-rate-fill').style.height = height;
+                return;
+            }
+
+            // 분석 (비동기)
+            setTimeout(() => {
+                // 현재 턴인 사람의 승률을 구함
+                const winRate = ai.getWinRate(logic, logic.currentPlayer, 500);
+                
+                // winRate는 '현재 턴 플레이어'의 승률임.
+                // UI는 '흑(Player 1) 기준' 승률로 통일해서 보여주는 게 직관적.
+                let blackWinRate = logic.currentPlayer === 1 ? winRate : (100 - winRate);
+                
+                document.getElementById('win-rate-text').innerText = `흑 승률: ${Math.round(blackWinRate)}%`;
+                document.getElementById('win-rate-fill').style.height = `${Math.round(blackWinRate)}%`;
+                
+                // 승률에 따라 바 색상 변경 (흑 우세: 검정, 백 우세: 흰색/회색)
+                // 하지만 심플하게 흑의 비율만큼 채워지는 형태로 유지
+            }, 10);
         }
 
         function renderBoard() {
@@ -794,6 +647,7 @@
         function updateGhost() {
             while(ghostGroup.children.length>0) ghostGroup.remove(ghostGroup.children[0]);
             if(logic.winner!==0) return;
+            if(isSpectator) return; // 관전자는 고스트 없음
             if(isOnline && logic.currentPlayer!==myPlayerNum) return;
             if(logic.phase==='MOVEMENT' && !logic.selectedBlock) return;
             if(hoverX===-1) return;
@@ -806,56 +660,82 @@
         function drawGhost(cells, col, grp, op) {
             const mat = new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:op});
             const geo = new RoundedBoxGeometry(0.96,0.96,0.96, 4, 0.1);
-            cells.forEach(c=>{
-                const m = new THREE.Mesh(geo, mat); m.position.set(c.x-2, c.z+0.52, c.y-2);
-                grp.add(m);
-            });
+            cells.forEach(c=>{ const m = new THREE.Mesh(geo, mat); m.position.set(c.x-2, c.z+0.52, c.y-2); grp.add(m); });
         }
 
         window.showSideSelection = () => {
+            myNickname = document.getElementById('nickname-input').value || "Player";
+            p1Name = myNickname; p2Name = "AI Robot";
             document.getElementById('lobby-main').style.display='none';
             document.getElementById('lobby-side').style.display='block';
         };
 
         window.startSingleGame = (playerNum) => {
             isOnline = false; myPlayerNum = playerNum; 
+            if(myPlayerNum === 2) { p1Name = "AI Robot"; p2Name = myNickname; }
             document.getElementById('lobby-overlay').style.display = 'none';
             document.getElementById('ui-layer').style.display = 'flex';
             
             const badge = document.getElementById('my-player-badge');
-            badge.innerText = playerNum===1 ? "👤 나: 흑 (선공)" : "👤 나: 백 (후공)";
-            badge.style.background = playerNum===1 ? "#333" : "#9b59b6";
+            badge.innerText = "👤 싱글 모드";
+            badge.style.background = "#333";
             
             logic.aiMode = true; 
             updateUI();
+            updateWinRateUI();
 
-            if(myPlayerNum === 2) {
-                setTimeout(runAI, 500); 
-            }
+            if(myPlayerNum === 2) { setTimeout(runAI, 500); }
         };
 
         window.createRoom = () => {
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-            let code = '';
-            for(let i=0; i<6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+            let code = ''; for(let i=0; i<6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
             myRoomId = code; myPlayerNum = 1; 
-            set(ref(db, 'rooms/' + code), { status: 'waiting', board: logic.serialize(), undoReq: null });
+            myNickname = document.getElementById('nickname-input').value || "Host";
+            p1Name = myNickname; p2Name = "대기중...";
+
+            set(ref(db, 'rooms/' + code), { 
+                status: 'waiting', 
+                board: logic.serialize(), 
+                undoReq: null, 
+                hintReq: null,
+                players: { 1: myNickname, 2: "" }
+            });
             document.getElementById('lobby-main').style.display = 'none';
             document.getElementById('lobby-wait').style.display = 'block';
             document.getElementById('display-room-code').innerText = code;
-            onValue(ref(db, 'rooms/' + code + '/status'), (snap) => {
-                if (snap.val() === 'playing') startGameMulti(1);
+            
+            // 상대방 입장 대기
+            onValue(ref(db, 'rooms/' + code + '/players/2'), (snap) => {
+                if (snap.val()) {
+                    p2Name = snap.val();
+                    update(ref(db, 'rooms/' + code), { status: 'playing' });
+                    startGameMulti(1);
+                }
             });
         };
 
         window.joinRoom = () => {
             const code = document.getElementById('room-code-input').value.toUpperCase();
             if(code.length !== 6) { alert("코드 6자리를 입력해주세요."); return; }
+            myNickname = document.getElementById('nickname-input').value || "Guest";
+
             get(child(ref(db), 'rooms/' + code)).then((snap) => {
                 if (snap.exists()) {
-                    myRoomId = code; myPlayerNum = 2; 
-                    update(ref(db, 'rooms/' + code), { status: 'playing' });
-                    startGameMulti(2);
+                    const roomData = snap.val();
+                    if (roomData.status === 'playing') {
+                        // 🌟 방이 꽉 찼을 때 관전 모드 제안
+                        if (confirm("이 방은 두 명의 플레이어가 모두 플레이중입니다.\n관전하시겠습니까?")) {
+                            myRoomId = code; myPlayerNum = 3; isSpectator = true;
+                            p1Name = roomData.players[1]; p2Name = roomData.players[2];
+                            startGameMulti(3);
+                        }
+                    } else {
+                        myRoomId = code; myPlayerNum = 2; 
+                        p1Name = roomData.players[1]; p2Name = myNickname;
+                        update(ref(db, 'rooms/' + code + '/players'), { 2: myNickname });
+                        startGameMulti(2);
+                    }
                 } else alert("방을 찾을 수 없습니다.");
             });
         };
@@ -865,27 +745,79 @@
             document.getElementById('ui-layer').style.display = 'flex';
             isOnline = true;
             document.getElementById('btn-ai-toggle').style.display = 'none';
+            // 멀티 모드에선 초기화 버튼 숨김
+            document.getElementById('btn-reset').style.display = 'none';
+
             const badge = document.getElementById('my-player-badge');
-            badge.innerText = pNum===1 ? "🌐 Host (흑)" : "🌐 Guest (백)";
-            badge.style.background = pNum===1 ? "#e74c3c" : "#2ecc71";
+            if (isSpectator) {
+                badge.innerText = "👀 관전 모드";
+                badge.style.background = "#7f8c8d";
+            } else {
+                badge.innerText = pNum===1 ? "🌐 Host (흑)" : "🌐 Guest (백)";
+                badge.style.background = pNum===1 ? "#e74c3c" : "#2ecc71";
+            }
+            
+            // 보드 상태 동기화
             onValue(ref(db, 'rooms/' + myRoomId + '/board'), (snap) => {
                 if (snap.val()) {
                     logic.deserialize(snap.val());
-                    renderBoard(); updateUI();
-                    setTimeout(() => { if(logic.winner!==0) alert(`게임 종료! Player ${logic.winner} 승리!`); }, 200);
+                    renderBoard(); updateUI(); updateWinRateUI();
+                    setTimeout(() => { if(logic.winner!==0) alert(`게임 종료! ${logic.winner===1?p1Name:p2Name} 승리!`); }, 200);
                 }
             });
+
+            // 무르기 요청 감지
             onValue(ref(db, 'rooms/' + myRoomId + '/undoReq'), (snap) => {
                 const req = snap.val();
-                if (req && req.requester !== myPlayerNum) {
-                    if (confirm("상대방이 '무르기'를 요청했습니다. 수락하시겠습니까?")) {
+                if (!req) return;
+
+                // 거절당함 알림
+                if (req.status === 'rejected' && req.requester === myPlayerNum) {
+                    alert("상대방이 무르기를 거절했습니다.");
+                    set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null);
+                    return;
+                }
+
+                // 요청 받음
+                if (req.status === 'pending' && req.requester !== myPlayerNum && !isSpectator) {
+                    if (confirm("상대방이 '무르기'를 요청했습니다. 승낙하시겠습니까?")) {
+                        // 🌟 무르기 로직 수정: 두 번 undo 후 즉시 DB 저장
                         logic.undo(); logic.undo();
                         set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize());
                         set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null);
-                        alert("무르기를 수락했습니다.");
+                        alert("무르기를 승낙했습니다.");
                     } else {
-                        set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null);
-                        alert("무르기를 거절했습니다.");
+                        // 거절 상태 전송
+                        update(ref(db, 'rooms/' + myRoomId + '/undoReq'), { status: 'rejected' });
+                    }
+                }
+            });
+
+            // AI 힌트 요청 감지
+            onValue(ref(db, 'rooms/' + myRoomId + '/hintReq'), (snap) => {
+                const req = snap.val();
+                if (!req) return;
+
+                // 힌트 허용됨
+                if (req.status === 'granted' && req.requester === myPlayerNum) {
+                    alert("상대방이 힌트 사용을 허락했습니다!");
+                    set(ref(db, 'rooms/' + myRoomId + '/hintReq'), null);
+                    window.actuallyShowHint(); // 힌트 실행
+                    return;
+                }
+                // 힌트 거절됨
+                if (req.status === 'rejected' && req.requester === myPlayerNum) {
+                    alert("상대방이 힌트 사용을 거절했습니다.");
+                    set(ref(db, 'rooms/' + myRoomId + '/hintReq'), null);
+                    return;
+                }
+
+                // 요청 받음
+                if (req.status === 'pending' && req.requester !== myPlayerNum && !isSpectator) {
+                    if (confirm(`상대방(${req.requester===1?p1Name:p2Name})이 AI 힌트를 쓰려고 합니다.\n허용하시겠습니까?`)) {
+                        update(ref(db, 'rooms/' + myRoomId + '/hintReq'), { status: 'granted' });
+                    } else {
+                        update(ref(db, 'rooms/' + myRoomId + '/hintReq'), { status: 'rejected' });
                     }
                 }
             });
@@ -893,35 +825,46 @@
 
         window.requestUndo = () => {
             if (!isOnline) return;
+            if (isSpectator) return;
             if (confirm("상대방에게 무르기를 요청하시겠습니까?")) {
-                set(ref(db, 'rooms/' + myRoomId + '/undoReq'), { requester: myPlayerNum });
+                set(ref(db, 'rooms/' + myRoomId + '/undoReq'), { requester: myPlayerNum, status: 'pending' });
                 log("무르기 요청을 보냈습니다...");
             }
         }
 
         function sendMove() {
-            if (isOnline) set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize());
+            if (isOnline && !isSpectator) set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize());
         }
 
-        // [askAI 수정] 힌트 요청 시 시각화 적용
+        // [수정] 힌트 요청 (멀티플레이시 합의 필요)
         window.askAI = async () => {
-            if(logic.winner!==0) return;
+            if (logic.winner !== 0) return;
+            
+            if (isOnline) {
+                if (isSpectator) return;
+                if (confirm("멀티 모드에서는 상대방의 동의가 필요합니다.\n힌트 요청을 보내시겠습니까?")) {
+                    set(ref(db, 'rooms/' + myRoomId + '/hintReq'), { requester: myPlayerNum, status: 'pending' });
+                    log("힌트 승인 요청 중...");
+                }
+            } else {
+                window.actuallyShowHint();
+            }
+        };
+
+        window.actuallyShowHint = async () => {
             const loader = document.getElementById('ai-loader');
             loader.innerText = "💡 힌트 찾는 중...";
             loader.style.display = 'block';
             await new Promise(r => setTimeout(r, 10));
 
-            // 1. 기존 표시 지우기
             clearThinkingIndicators();
-            while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); // 기존 힌트도 지움
+            while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]);
 
-            // 2. 시각화 콜백 전달
             const move = await ai.getBestMove(logic, logic.currentPlayer, 1500, (thinkingMove) => {
                 clearThinkingIndicators();
                 showThinkingIndicator(thinkingMove);
             });
             
-            // 3. 최종 지우기
             clearThinkingIndicators();
             loader.style.display = 'none';
 
@@ -931,28 +874,22 @@
                     if(src) drawGhost(src.cells, 0xff4444, hintGroup, 0.6);
                     log("⚠️ [힌트] 빨강 -> 노랑 이동");
                 } else log("💡 [힌트] 노랑 위치 착수");
-                // 최종 힌트는 노란색으로 진하게 표시
                 drawGhost(move.cells, 0xf1c40f, hintGroup, 0.8);
             } else log("AI: 둘 곳이 없어요.");
         };
-        // [runAI 수정] AI 대전 시 시각화 적용
+
         async function runAI() {
             const loader = document.getElementById('ai-loader');
             loader.innerText = "🤖 AI 고민 중...";
             loader.style.display = 'block';
             await new Promise(r => setTimeout(r, 10));
 
-            // 1. 기존 표시 지우기
             clearThinkingIndicators(); 
-
-            // 2. AI에게 시각화 콜백 함수 전달!
-            // (thinkingMove가 들어오면 지우고 다시 그림 = 깜빡이는 효과)
             const move = await ai.getBestMove(logic, logic.currentPlayer, 1500, (thinkingMove) => {
                 clearThinkingIndicators();
                 showThinkingIndicator(thinkingMove);
             });
             
-            // 3. 다 생각했으니 최종적으로 지우기
             clearThinkingIndicators();
             loader.style.display = 'none';
 
@@ -976,12 +913,12 @@
             logic.aiMode = !logic.aiMode; updateUI();
             if(!isOnline && logic.aiMode && logic.currentPlayer !== myPlayerNum) runAI();
         };
-        window.undo = () => { if(!isOnline && logic.undo()) { log("무르기"); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); } };
-        window.resetGame = () => { if(!isOnline && confirm("초기화?")) { logic.reset(); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); log("초기화됨"); } };
+        window.undo = () => { if(!isOnline && logic.undo()) { log("무르기"); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); updateWinRateUI(); } };
+        window.resetGame = () => { if(!isOnline && confirm("초기화?")) { logic.reset(); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); updateWinRateUI(); log("초기화됨"); } };
         
         document.onkeydown = (e) => {
             if(e.code==='KeyR') { currentShapeIdx++; updateGhost(); }
-            if(e.code==='KeyZ') window.undo();
+            if(e.code==='KeyZ') { if(isOnline) window.requestUndo(); else window.undo(); }
         };
         
         document.getElementById('btn-rotate').addEventListener('click', e=>{ e.stopPropagation(); currentShapeIdx++; updateGhost(); });
@@ -991,6 +928,7 @@
         window.addEventListener('mousemove', e=>{
             mouse.x=(e.clientX/window.innerWidth)*2-1; mouse.y=-(e.clientY/window.innerHeight)*2+1;
             ray.setFromCamera(mouse, camera);
+            if(isSpectator) return;
             if(isOnline && logic.currentPlayer!==myPlayerNum) return;
             if(logic.phase==='MOVEMENT' && !logic.selectedBlock) {
                 const ints = ray.intersectObjects(boardGroup.children, true);
@@ -1013,6 +951,7 @@
         
         function click() {
             if(logic.winner!==0) return;
+            if(isSpectator) return;
             if(isOnline && logic.currentPlayer!==myPlayerNum) { log("상대방 턴입니다."); return; }
             while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]);
 
@@ -1034,7 +973,7 @@
                 if(chk.ok) {
                     logic.confirmMove(cells, currentShapeIdx%8);
                     log("착수 완료"); renderBoard(); updateUI(); updateGhost();
-                    setTimeout(() => { if(logic.winner!==0) alert(`게임 종료! Player ${logic.winner} 승리!`); }, 200);
+                    setTimeout(() => { if(logic.winner!==0) alert(`게임 종료! ${logic.winner===1?p1Name:p2Name} 승리!`); }, 200);
                 } else log(chk.msg);
             }
         }
