@@ -232,13 +232,22 @@
             }
         });
 
-        // 🌟 NeuralAI (ONNX 버전)
+        // 🌟 NeuralAI (3채널 입력 버전: 내돌, 상대돌, 내블록상태)
         class NeuralAI {
-            constructor() { this.session = null; this.ready = false; }
+            constructor() {
+                this.session = null;
+                this.ready = false;
+            }
+
             async init(url) {
                 try {
                     document.getElementById('ai-status-text').innerText = "⏳ ONNX 로딩 중...";
-                    this.session = await ort.InferenceSession.create(url);
+                    // 실행 옵션 최적화 (모바일/웹 성능 향상)
+                    const options = {
+                        executionProviders: ['wasm'], // WebAssembly 가속 사용
+                        graphOptimizationLevel: 'all'
+                    };
+                    this.session = await ort.InferenceSession.create(url, options);
                     this.ready = true;
                     document.getElementById('ai-status-text').innerText = "✅ AI 장착 완료!";
                     document.getElementById('ai-status-text').style.color = "#2ecc71";
@@ -248,64 +257,147 @@
                     document.getElementById('ai-status-text').style.color = "red";
                 }
             }
+
             async computeLogits(logic, player) {
-                if (!this.ready) return new Array(200).fill(0);
-                const inputData = new Float32Array(1 * 2 * 5 * 5 * 5);
+                if (!this.ready) return new Array(200).fill(-Infinity); // 준비 안 됐으면 매우 낮은 점수 반환
+
+                // 🌟 [핵심] 3채널 입력 구성 (Shape: [1, 3, 5, 5, 5])
+                const inputData = new Float32Array(1 * 3 * 5 * 5 * 5);
                 const opp = player === 1 ? 2 : 1;
                 let idx = 0;
-                for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) inputData[idx++] = (logic.board[z][y][x] === player ? 1.0 : 0.0);
-                for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) inputData[idx++] = (logic.board[z][y][x] === opp ? 1.0 : 0.0);
-                const tensor = new ort.Tensor('float32', inputData, [1, 2, 5, 5, 5]);
-                const results = await this.session.run({ input: tensor });
-                return results.output.data;
+
+                // Channel 0: 내 돌 (1.0), 빈칸/상대 (0.0)
+                for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) 
+                    inputData[idx++] = (logic.board[z][y][x] === player ? 1.0 : 0.0);
+                
+                // Channel 1: 상대 돌 (1.0), 빈칸/내돌 (0.0)
+                for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) 
+                    inputData[idx++] = (logic.board[z][y][x] === opp ? 1.0 : 0.0);
+
+                // Channel 2: 현재 단계 (Placement=1.0, Movement=0.0)
+                // logic.blocksLeft[player]가 > 0 이면 배치 단계
+                const phaseVal = (logic.blocksLeft[player] > 0) ? 1.0 : 0.0;
+                for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) 
+                    inputData[idx++] = phaseVal;
+
+                try {
+                    const tensor = new ort.Tensor('float32', inputData, [1, 3, 5, 5, 5]);
+                    // 'input'은 Python export 시 지정한 이름과 같아야 함
+                    const results = await this.session.run({ input: tensor });
+                    return results.output.data;
+                } catch (e) {
+                    console.error("Inference Failed:", e);
+                    return new Array(200).fill(0);
+                }
             }
+
             async getBestMove(logic, player) {
+                // 1. Placement Phase
                 if (logic.phase === 'PLACEMENT') {
                     if (logic.blocksLeft[player] <= 0) return null;
                     return await this.computeBestPlacement(logic, player);
-                } else if (logic.phase === 'MOVEMENT') {
-                    let bestScore = -Infinity; let bestMove = null;
+                } 
+                // 2. Movement Phase
+                else if (logic.phase === 'MOVEMENT') {
+                    let bestScore = -Infinity;
+                    let bestMove = null;
+                    
+                    // 내 블록들을 하나씩 들어보며 시뮬레이션
                     const myBlocks = logic.blocks.filter(b => b.player === player && !b.isFixed);
+
                     for (const block of myBlocks) {
                         if (!logic.canPick(block)) continue;
+                        
+                        // 가상으로 블록을 들어냄
                         const tempLogic = logic.clone();
                         tempLogic.removeBlock(block.id);
-                        tempLogic.selectedBlockOriginalCells = block.cells;
+                        // 중요: tempLogic.blocksLeft는 clone 시 복사되지만, 
+                        // removeBlock 했다고 blocksLeft가 늘어나진 않음 (Movement 단계이므로 0 유지).
+                        // 따라서 computeLogits 내부에서 phaseVal은 자동으로 0.0이 됨. (의도대로 동작)
+
                         const logits = await this.computeLogits(tempLogic, player);
-                        const topActions = Array.from(logits).map((score, idx) => ({ score, idx })).sort((a, b) => b.score - a.score).slice(0, 20);
+
+                        // 상위 10개만 검사 (속도 최적화를 위해 20 -> 10으로 줄임)
+                        const topActions = Array.from(logits)
+                            .map((score, idx) => ({ score, idx }))
+                            .sort((a, b) => b.score - a.score)
+                            .slice(0, 10);
+
                         for (const action of topActions) {
+                            // 가지치기: 현재 찾은 최선보다 점수가 낮으면 더 볼 필요 없음
                             if (action.score <= bestScore) continue;
-                            const sh = action.idx % 8; const px = Math.floor(action.idx / 8) % 5; const py = Math.floor(Math.floor(action.idx / 8) / 5);
-                            let baseCells = getCellsFromBase(px, py, sh); let validZFound = false; let finalCells = null;
+
+                            const sh = action.idx % 8;
+                            const px = Math.floor(action.idx / 8) % 5;
+                            const py = Math.floor(Math.floor(action.idx / 8) / 5);
+                            
+                            let baseCells = getCellsFromBase(px, py, sh);
+                            let finalCells = null;
+
+                            // 중력 적용 (바닥부터 탐색)
                             for (let dz = 0; dz < 5; dz++) {
                                 const testCells = baseCells.map(c => ({ x: c.x, y: c.y, z: c.z + dz }));
                                 if (testCells.some(c => c.z > 4)) break;
-                                if (tempLogic.checkValidity(player, testCells, true, block.cells).ok) { finalCells = testCells; validZFound = true; break; }
+                                
+                                // tempLogic(블록이 제거된 상태)에서 유효성 검사
+                                // checkValidity의 3번째 인자 true(isMovement), 4번째 인자 block.cells(원래 위치 무시)
+                                const check = tempLogic.checkValidity(player, testCells, true, block.cells);
+                                if (check.ok) { 
+                                    finalCells = testCells; 
+                                    break; // 가장 낮은 곳 착지 (중력)
+                                }
                             }
-                            if (validZFound && finalCells) { bestScore = action.score; bestMove = { type: 'move', fromId: block.id, cells: finalCells, shapeIdx: sh }; }
+
+                            if (finalCells) {
+                                bestScore = action.score;
+                                bestMove = { type: 'move', fromId: block.id, cells: finalCells, shapeIdx: sh };
+                            }
                         }
                     }
                     return bestMove;
                 }
                 return null;
             }
+
             async computeBestPlacement(logic, player) {
                 const logits = await this.computeLogits(logic, player);
-                const validActions = []; const actionToMove = {};
+                const validActions = [];
+                const actionToMove = {};
+
+                // 모든 가능한 착수 위치(Action) 미리 계산
                 for(let i=0; i<200; i++) {
-                    const sh = i % 8; const px = Math.floor(i / 8) % 5; const py = Math.floor(Math.floor(i / 8) / 5); 
+                    const sh = i % 8; 
+                    const px = Math.floor(i / 8) % 5; 
+                    const py = Math.floor(Math.floor(i / 8) / 5); 
+                    
                     let baseCells = getCellsFromBase(px, py, sh); 
-                    let validZFound = false; let finalCells = null;
+                    let finalCells = null;
+                    
+                    // 중력 적용
                     for (let dz = 0; dz < 5; dz++) {
                         const testCells = baseCells.map(c => ({ x: c.x, y: c.y, z: c.z + dz }));
                         if (testCells.some(c => c.z > 4)) break;
-                        if (logic.checkValidity(player, testCells).ok) { finalCells = testCells; validZFound = true; break; }
+                        
+                        const check = logic.checkValidity(player, testCells);
+                        if (check.ok) { finalCells = testCells; break; }
                     }
-                    if (validZFound && finalCells) { validActions.push(i); actionToMove[i] = { type: 'place', cells: finalCells, shapeIdx: sh }; }
+                    if (finalCells) { 
+                        validActions.push(i); 
+                        actionToMove[i] = { type: 'place', cells: finalCells, shapeIdx: sh }; 
+                    }
                 }
+
                 if (validActions.length === 0) return null;
-                let bestIdx = -1; let maxVal = -Infinity;
-                for (let idx of validActions) { if (logits[idx] > maxVal) { maxVal = logits[idx]; bestIdx = idx; } }
+
+                // 유효한 수 중에서 AI 점수가 가장 높은 것 선택
+                let bestIdx = -1; 
+                let maxVal = -Infinity;
+                for (let idx of validActions) { 
+                    if (logits[idx] > maxVal) { 
+                        maxVal = logits[idx]; 
+                        bestIdx = idx; 
+                    } 
+                }
                 return bestIdx !== -1 ? actionToMove[bestIdx] : null;
             }
         }
