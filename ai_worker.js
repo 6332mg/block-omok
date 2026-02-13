@@ -1,6 +1,13 @@
 // 🧠 ai_worker.js - AI 전용 처리 일꾼 (Final Optimized)
 importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js");
 
+// 🚨 [필수 수정] WASM 파일 위치를 CDN으로 강제 지정
+ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
+
+// 🚨 [필수 수정] 멀티스레드 끄기 (서버 보안 헤더 문제 해결)
+// 싱글 스레드로도 오목 정도는 충분히 빠르며, 호환성이 훨씬 좋습니다.
+ort.env.wasm.numThreads = 1;
+
 let neuralSession = null;
 let useNeural = false;
 
