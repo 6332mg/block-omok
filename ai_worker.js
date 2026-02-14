@@ -1,13 +1,20 @@
 // 🧠 ai_worker.js
-// 1. 라이브러리 불러오기
-importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/ort.min.js");
 
-// 🌟 [핵심 수정] 보조 파일(.wasm)은 내 컴퓨터가 아니라 인터넷(CDN)에서 가져와라! 라고 설정
-ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/";
+// 1. 호환성이 가장 좋은 1.14.0 버전으로 고정 (최신 버전은 보안 정책이 까다로움)
+importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js");
 
-// ... (나머지 코드는 그대로 유지) ...
+// 2. 부품(.wasm) 위치를 CDN으로 정확하게 지정
+ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/";
+
+// 🚨 [핵심 해결책] 멀티스레드 끄기
+// Render 서버에는 보안 헤더(COOP/COEP)가 없으므로, 스레드를 1개로 제한해야만 작동함.
+ort.env.wasm.numThreads = 1; 
+ort.env.wasm.proxy = false; 
+
 let neuralSession = null;
 let useNeural = false;
+
+// ... (이 아래 const SHAPES = ... 부터는 기존 코드 그대로 두세요) ...
 
 const SHAPES = [
     [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:1,z:0}], [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:-1,z:0}],
