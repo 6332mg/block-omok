@@ -1,19 +1,20 @@
-// 🧠 ai_worker.js - 호환성 끝판왕 버전
+// 🧠 ai_worker.js
 
-// 1. 가장 안정적인 1.14.0 버전 사용
-importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js");
+// 1. 엔진 버전을 1.18.0 (최신 안정 버전)으로 업그레이드 -> IR version 10 지원함!
+importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js");
 
-// 2. WASM 파일 위치 지정
-ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/";
+// 2. 부품 위치도 1.18.0으로 맞춤
+ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
 
-// 3. 🚨 안전장치 3종 세트 (이게 없으면 무료 서버에서 잘 죽음)
-ort.env.wasm.numThreads = 1;  // 멀티스레드 끄기 (보안 에러 방지)
-ort.env.wasm.proxy = false;   // 프록시 끄기
-ort.env.wasm.simd = false;    // SIMD 가속 끄기 (구형기기/무료서버 호환성 해결)
+// 3. 🚨 안전장치 유지 (버전을 올려도 이건 꼭 켜야 Render에서 안 죽음)
+ort.env.wasm.numThreads = 1;  // 멀티스레드 차단
+ort.env.wasm.proxy = false;   // 프록시 차단
+ort.env.wasm.simd = false;    // SIMD 차단 (호환성 확보)
 
 let neuralSession = null;
 let useNeural = false;
 
+// ... (이 아래 코드는 그대로 두세요) ...
 // ... (이 아래 코드는 건드리지 마세요) ...
 
 // ... (이 아래 const SHAPES = ... 부터는 기존 코드 그대로 두세요) ...
