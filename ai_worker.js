@@ -1,6 +1,11 @@
-// 🧠 ai_worker.js - Final Simulation Logic Check
-importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js");
+// 🧠 ai_worker.js
+// 1. 라이브러리 불러오기
+importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/ort.min.js");
 
+// 🌟 [핵심 수정] 보조 파일(.wasm)은 내 컴퓨터가 아니라 인터넷(CDN)에서 가져와라! 라고 설정
+ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/";
+
+// ... (나머지 코드는 그대로 유지) ...
 let neuralSession = null;
 let useNeural = false;
 
