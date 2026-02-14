@@ -1,17 +1,9 @@
-// 🧠 ai_worker.js - AI 전용 처리 일꾼 (Final Optimized)
+// 🧠 ai_worker.js - Final Simulation Logic Check
 importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js");
-
-// 🚨 [필수 수정] WASM 파일 위치를 CDN으로 강제 지정
-ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/";
-
-// 🚨 [필수 수정] 멀티스레드 끄기 (서버 보안 헤더 문제 해결)
-// 싱글 스레드로도 오목 정도는 충분히 빠르며, 호환성이 훨씬 좋습니다.
-ort.env.wasm.numThreads = 1;
 
 let neuralSession = null;
 let useNeural = false;
 
-// 룰 정의 (index.html과 동일해야 함)
 const SHAPES = [
     [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:1,z:0}], [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:-1,z:0}],
     [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:-1,z:0}], [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:1,z:0}],
@@ -24,26 +16,26 @@ function checkValidity(board, player, cells, turnCount, ignoreCells=null) {
     if(ignoreCells) ignoreCells.forEach(c => ignoreSet.add(`${c.x},${c.y},${c.z}`));
 
     for(let c of cells) {
-        if(c.x<0||c.x>4||c.y<0||c.y>4||c.z<0||c.z>4) return {ok:false};
+        if(c.x<0||c.x>4||c.y<0||c.y>4||c.z<0||c.z>4) return false;
         if(board[c.z][c.y][c.x] !== 0) {
-            if(!ignoreSet.has(`${c.x},${c.y},${c.z}`)) return {ok:false};
+            if(!ignoreSet.has(`${c.x},${c.y},${c.z}`)) return false;
         }
     }
     const ground = cells.filter(c=>c.z===0).length;
-    if(ground!==1 && ground!==3) return {ok:false};
+    if(ground!==1 && ground!==3) return false;
 
     for(let c of cells) {
         if(c.z > 0) {
             const hasSup = (board[c.z-1][c.y][c.x] !== 0) && (!ignoreSet.has(`${c.x},${c.y},${c.z-1}`));
             const isSelf = cells.some(sc => sc.x===c.x && sc.y===c.y && sc.z===c.z-1);
-            if(!hasSup && !isSelf) return {ok:false};
+            if(!hasSup && !isSelf) return false;
         }
     }
     if(!ignoreCells && turnCount < 2) {
         const restricted = ["0,3","0,4","1,4","3,0","4,0","4,1"];
-        if(cells.some(c=>c.z===0 && restricted.includes(`${c.x},${c.y}`))) return {ok:false};
+        if(cells.some(c=>c.z===0 && restricted.includes(`${c.x},${c.y}`))) return false;
     }
-    return {ok:true};
+    return true;
 }
 
 function getCells(px, py, shIdx) {
@@ -60,45 +52,122 @@ function getLandingCells(board, player, actionIdx, turnCount, ignoreCells=null) 
     for(let dz=0; dz<5; dz++) {
         const testCells = baseCells.map(c => ({x: c.x, y: c.y, z: c.z + dz}));
         if(testCells.some(c => c.z > 4)) break;
-        if(checkValidity(board, player, testCells, turnCount, ignoreCells).ok) {
+        if(checkValidity(board, player, testCells, turnCount, ignoreCells)) {
             return { cells: testCells, shapeIdx: sh };
         }
     }
     return null;
 }
 
-// 뇌 실행 (공통 함수)
-async function runNeuralInference(board, blocksLeft, player) {
-    if (!useNeural || !neuralSession) return null;
-    try {
-        const inputData = new Float32Array(1 * 3 * 5 * 5 * 5);
-        const opp = player===1?2:1;
-        let idx = 0;
-        // [0] 내돌
-        for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) inputData[idx++] = (board[z][y][x]===player?1.0:0.0);
-        // [1] 상대돌
-        for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) inputData[idx++] = (board[z][y][x]===opp?1.0:0.0);
-        // [2] 상태 (배치:1, 이동:0)
-        // 주의: 이동 시뮬레이션 중에는 블록을 '들었기' 때문에 blocksLeft는 0이 됨 -> 0.0 전달 (정확함)
-        const phaseVal = (blocksLeft[player] > 0) ? 1.0 : 0.0;
-        for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) inputData[idx++] = phaseVal;
-
-        const tensor = new ort.Tensor('float32', inputData, [1, 3, 5, 5, 5]);
-        const results = await neuralSession.run({ input: tensor });
-        return results.output.data; // Logits
-    } catch(e) {
-        console.error("Neural Inference Error", e);
-        return null;
+// 🏆 승리 조건 체크 (Top View Simulation)
+function checkWin(board) {
+    const topMap = Array.from({length: 5}, () => Array(5).fill(0));
+    for(let y=0; y<5; y++) {
+        for(let x=0; x<5; x++) {
+            for(let z=4; z>=0; z--) {
+                if(board[z][y][x] !== 0) {
+                    topMap[y][x] = board[z][y][x];
+                    break;
+                }
+            }
+        }
     }
+    const dirs = [{dx:1, dy:0}, {dx:0, dy:1}, {dx:1, dy:1}, {dx:1, dy:-1}];
+    for(let y=0; y<5; y++) {
+        for(let x=0; x<5; x++) {
+            let c = topMap[y][x];
+            if(c === 0) continue;
+            for(let d of dirs) {
+                let cnt = 1;
+                for(let k=1; k<5; k++) {
+                    let nx = x + d.dx*k;
+                    let ny = y + d.dy*k;
+                    if(nx>=0 && nx<5 && ny>=0 && ny<5 && topMap[ny][nx] === c) cnt++;
+                    else break;
+                }
+                if(cnt === 5) return c;
+            }
+        }
+    }
+    return 0;
+}
+
+// 🧠 1수 앞을 내다보는 시뮬레이션 (공격 & 방어 통합)
+function findSmartMove(board, blocks, player, phase, blocksLeft, turnCount) {
+    const opponent = player === 1 ? 2 : 1;
+    let candidates = [];
+
+    // [1] 후보 수집
+    if (phase === 'PLACEMENT') {
+        for(let i=0; i<200; i++) {
+            const res = getLandingCells(board, player, i, turnCount);
+            if(res) candidates.push({ type: 'place', cells: res.cells, shapeIdx: res.shapeIdx, actionIdx: i });
+        }
+    } else {
+        const myBlocks = blocks.filter(b => b.player === player && !b.isFixed);
+        for(let b of myBlocks) {
+            let canPick = true;
+            for(let c of b.cells) {
+                if(c.z < 4 && board[c.z+1][c.y][c.x] !== 0) {
+                    const isSelf = b.cells.some(sc=>sc.x===c.x && sc.y===c.y && sc.z===c.z+1);
+                    if(!isSelf) { canPick = false; break; }
+                }
+            }
+            if(!canPick) continue;
+            const tempBoard = JSON.parse(JSON.stringify(board));
+            b.cells.forEach(c => tempBoard[c.z][c.y][c.x] = 0);
+            for(let i=0; i<200; i++) {
+                const res = getLandingCells(tempBoard, player, i, turnCount, b.cells);
+                if(res) {
+                    const cSet = new Set(res.cells.map(c=>`${c.x},${c.y},${c.z}`));
+                    const oSet = new Set(b.cells.map(c=>`${c.x},${c.y},${c.z}`));
+                    if(cSet.size !== oSet.size || [...cSet].some(x => !oSet.has(x))) {
+                        candidates.push({ type: 'move', fromId: b.id, cells: res.cells, shapeIdx: res.shapeIdx, tempBoard: tempBoard });
+                    }
+                }
+            }
+        }
+    }
+
+    // 🕵️‍♂️ 전략 1: 킬각 (내가 두면 이김?)
+    for (let move of candidates) {
+        let simBoard;
+        if(move.type === 'place') {
+            simBoard = JSON.parse(JSON.stringify(board));
+            move.cells.forEach(c => simBoard[c.z][c.y][c.x] = player);
+        } else {
+            simBoard = JSON.parse(JSON.stringify(move.tempBoard));
+            move.cells.forEach(c => simBoard[c.z][c.y][c.x] = player);
+        }
+        if (checkWin(simBoard) === player) return { move: move, strategy: "winning_move" };
+    }
+
+    // 🛡️ 전략 2: 방어 (상대가 두면 이김? -> 막아!)
+    if (phase === 'PLACEMENT' && blocksLeft[opponent] > 0) {
+        for(let i=0; i<200; i++) {
+            const res = getLandingCells(board, opponent, i, turnCount);
+            if(res) {
+                const simBoard = JSON.parse(JSON.stringify(board));
+                res.cells.forEach(c => simBoard[c.z][c.y][c.x] = opponent);
+                if (checkWin(simBoard) === opponent) {
+                    // 상대 킬각 발견! 내가 뺏을 수 있나?
+                    const myBlock = getLandingCells(board, player, i, turnCount);
+                    if (myBlock) return { move: { type: 'place', cells: myBlock.cells, shapeIdx: myBlock.shapeIdx }, strategy: "blocking_move" };
+                }
+            }
+        }
+    }
+
+    // 🎲 전략 3: 랜덤 (임시)
+    if (candidates.length > 0) return { move: candidates[Math.floor(Math.random() * candidates.length)], strategy: "random" };
+    return null;
 }
 
 self.onmessage = async function(e) {
     const msg = e.data;
-
     if (msg.type === 'INIT') {
         try {
-            const options = { executionProviders: ['wasm'] }; // 가속 옵션
-            neuralSession = await ort.InferenceSession.create(msg.url || './omok_model.onnx', options);
+            neuralSession = await ort.InferenceSession.create(msg.url || './omok_model.onnx');
             useNeural = true;
             self.postMessage({ type: 'INIT_OK' });
         } catch (err) {
@@ -108,86 +177,46 @@ self.onmessage = async function(e) {
     else if (msg.type === 'THINK') {
         const { board, blocks, blocksLeft, phase, player, turnCount } = msg.gameState;
         
-        let bestMove = null;
-        let strategy = "random";
+        let result = null;
 
-        // 1. 뇌 사용 가능 시
-        if (useNeural) {
-            strategy = "neural";
-            
-            // A. 배치 (Placement)
-            if (phase === 'PLACEMENT') {
-                const logits = await runNeuralInference(board, blocksLeft, player);
-                if (logits) {
-                    let maxScore = -Infinity;
-                    for(let i=0; i<200; i++) {
-                        // 유효성 체크 후 점수 비교
-                        const res = getLandingCells(board, player, i, turnCount);
-                        if(res) {
-                            if(logits[i] > maxScore) {
-                                maxScore = logits[i];
-                                bestMove = { type: 'place', cells: res.cells, shapeIdx: res.shapeIdx };
-                            }
-                        }
-                    }
-                }
-            }
-            // B. 이동 (Movement) - 🌟 [복구됨] AI 지능 적용
-            else {
-                // 내 블록들을 하나씩 들어보고(Remove), 그 상태에서 AI에게 물어본 뒤, 최적의 착수점 찾기
+        // 1. 뇌(ONNX) 사용 (모델이 로드되었고 Placement 단계일 때만)
+        if (useNeural && phase === 'PLACEMENT') {
+            try {
+                const inputData = new Float32Array(1 * 3 * 5 * 5 * 5);
+                const opp = player===1?2:1;
+                let idx = 0;
+                for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) inputData[idx++] = (board[z][y][x]===player?1.0:0.0);
+                for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) inputData[idx++] = (board[z][y][x]===opp?1.0:0.0);
+                const phaseVal = 1.0; // Placement
+                for(let z=0; z<5; z++) for(let y=0; y<5; y++) for(let x=0; x<5; x++) inputData[idx++] = phaseVal;
+
+                const tensor = new ort.Tensor('float32', inputData, [1, 3, 5, 5, 5]);
+                const results = await neuralSession.run({ input: tensor });
+                const logits = results.output.data;
+
+                // ONNX가 추천한 가장 높은 점수의 '유효한' 수 찾기
                 let maxScore = -Infinity;
-                const myBlocks = blocks.filter(b => b.player === player && !b.isFixed);
-
-                for (const b of myBlocks) {
-                    // 1. 픽 가능한지 체크 (위에 돌 없어야 함)
-                    let canPick = true;
-                    for(let c of b.cells) {
-                        if(c.z<4 && board[c.z+1][c.y][c.x] !== 0) {
-                            const isSelf = b.cells.some(sc=>sc.x===c.x && sc.y===c.y && sc.z===c.z+1);
-                            if(!isSelf) { canPick=false; break; }
-                        }
-                    }
-                    if(!canPick) continue;
-
-                    // 2. 가상 제거 (보드 복사)
-                    // (성능을 위해 Deep Copy 대신 필요한 부분만 수정하고 원복하는 방식 추천하지만, 안전하게 복사)
-                    const tempBoard = JSON.parse(JSON.stringify(board)); 
-                    b.cells.forEach(c => tempBoard[c.z][c.y][c.x] = 0);
-
-                    // 3. 이 상태에서 AI 예측 (blocksLeft는 당연히 0)
-                    const logits = await runNeuralInference(tempBoard, blocksLeft, player);
-                    
-                    if (logits) {
-                        // 상위 점수 탐색
-                        // 속도를 위해 상위 20개만 보거나, 전체를 봐도 Worker라 화면 안 멈춤 (전체 권장)
-                        for(let i=0; i<200; i++) {
-                            // 현재 최고점보다 낮으면 스킵 (가지치기)
-                            if (logits[i] <= maxScore) continue;
-
-                            const res = getLandingCells(tempBoard, player, i, turnCount, b.cells);
-                            if(res) {
-                                // 제자리 체크
-                                const cSet = new Set(res.cells.map(c=>`${c.x},${c.y},${c.z}`));
-                                const oSet = new Set(b.cells.map(c=>`${c.x},${c.y},${c.z}`));
-                                // 좌표가 다르거나 구성이 다르면 이동 인정
-                                if(cSet.size !== oSet.size || [...cSet].some(x => !oSet.has(x))) {
-                                    maxScore = logits[i];
-                                    bestMove = { type: 'move', fromId: b.id, cells: res.cells, shapeIdx: res.shapeIdx };
-                                }
-                            }
+                let bestMove = null;
+                for(let i=0; i<200; i++) {
+                    const res = getLandingCells(board, player, i, turnCount);
+                    if(res) {
+                        if(logits[i] > maxScore) {
+                            maxScore = logits[i];
+                            bestMove = { type: 'place', cells: res.cells, shapeIdx: res.shapeIdx };
                         }
                     }
                 }
-            }
+                if(bestMove) result = { move: bestMove, strategy: "neural_network" };
+            } catch(e) { console.error(e); }
         }
 
-        // 2. 뇌가 없거나 실패 시 (완전 랜덤)
-        if (!bestMove) {
-            strategy = "heuristic(random)";
-            // (기존 랜덤 로직 유지 - 코드 줄임을 위해 생략, 위 Neural 로직이 실패할 확률은 거의 없음)
-            // 비상용으로 가장 단순한 첫 번째 유효수 반환하도록 처리 가능
+        // 2. 뇌가 없거나, 실패했거나, Movement 단계라면 -> 스마트 계산기 가동
+        if (!result) {
+            result = findSmartMove(board, blocks, player, phase, blocksLeft, turnCount);
         }
 
-        self.postMessage({ type: 'MOVE', move: bestMove, strategy: strategy });
+        const finalMove = result ? result.move : null;
+        const strategy = result ? result.strategy : "none";
+        self.postMessage({ type: 'MOVE', move: finalMove, strategy: strategy });
     }
 };
