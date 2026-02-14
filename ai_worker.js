@@ -1,18 +1,20 @@
-// 🧠 ai_worker.js
+// 🧠 ai_worker.js - 호환성 끝판왕 버전
 
-// 1. 호환성이 가장 좋은 1.14.0 버전으로 고정 (최신 버전은 보안 정책이 까다로움)
+// 1. 가장 안정적인 1.14.0 버전 사용
 importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/ort.min.js");
 
-// 2. 부품(.wasm) 위치를 CDN으로 정확하게 지정
+// 2. WASM 파일 위치 지정
 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/";
 
-// 🚨 [핵심 해결책] 멀티스레드 끄기
-// Render 서버에는 보안 헤더(COOP/COEP)가 없으므로, 스레드를 1개로 제한해야만 작동함.
-ort.env.wasm.numThreads = 1; 
-ort.env.wasm.proxy = false; 
+// 3. 🚨 안전장치 3종 세트 (이게 없으면 무료 서버에서 잘 죽음)
+ort.env.wasm.numThreads = 1;  // 멀티스레드 끄기 (보안 에러 방지)
+ort.env.wasm.proxy = false;   // 프록시 끄기
+ort.env.wasm.simd = false;    // SIMD 가속 끄기 (구형기기/무료서버 호환성 해결)
 
 let neuralSession = null;
 let useNeural = false;
+
+// ... (이 아래 코드는 건드리지 마세요) ...
 
 // ... (이 아래 const SHAPES = ... 부터는 기존 코드 그대로 두세요) ...
 
