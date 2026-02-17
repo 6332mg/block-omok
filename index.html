@@ -164,7 +164,7 @@
             <span class="close-btn" onclick="document.getElementById('rule-modal').style.display='none'">&times;</span>
             <h3>📜 게임 규칙 상세</h3>
             <div class="rule-sec"><div class="rule-head">1. 승리 조건</div><div class="rule-desc">위에서 내려다보았을 때(Top View), 자신의 색깔 블록 5개가 연속(가로, 세로, 대각선)되면 승리합니다.</div></div>
-            <div class="rule-sec"><div class="rule-head">2. 착수 규칙</div><div class="rule-desc">- <b>접지/지지:</b> 바닥에 닿거나 아래에 블록이 있어야 합니다.<br>- <b>금지 구역:</b> 각자 2턴 동안 귀퉁이 착수 금지.</div></div>
+            <div class="rule-sec"><div class="rule-head">2. 착수 규칙</div><div class="rule-desc">- <b>접지/지지:</b> 바닥에 닿거나 아래에 블록이 있어야 합니다.<br>- <b>금지 구역(2턴 한정):</b> 백(1)은 좌상단 (1,4)(1,5)(2,5), 흑(2)는 우하단 (4,1)(5,1)(5,2)만 금지.</div></div>
             <div class="rule-sec"><div class="rule-head">3. 이동 단계</div><div class="rule-desc">- 블록 4개를 다 쓰면 기존 블록을 옮겨야 합니다.<br>- 위에 다른 블록이 있으면 못 옮깁니다.</div></div>
         </div>
     </div>
@@ -313,8 +313,8 @@
             deserialize(data) { Object.assign(this, data); }
             initFixedBlocks() {
                 this.blocks = []; this.board = Array.from({length: 5}, () => Array.from({length: 5}, () => Array(5).fill(0)));
-                this.addBlock(1, [{x:1, y:3, z:0}, {x:2, y:3, z:0}, {x:1, y:2, z:0}], 0, true);
-                this.addBlock(2, [{x:2, y:1, z:0}, {x:3, y:1, z:0}, {x:3, y:2, z:0}], 0, true);
+                this.addBlock(1, [{x:1, y:3, z:0}, {x:2, y:3, z:0}, {x:1, y:2, z:0}], 0, false);
+                this.addBlock(2, [{x:2, y:1, z:0}, {x:3, y:1, z:0}, {x:3, y:2, z:0}], 0, false);
             }
             addBlock(player, cells, shapeIdx, isFixed=false) {
                 const blockId = Date.now() + Math.random(); this.blocks.push({ id: blockId, player, cells, shapeIdx, isFixed });
@@ -325,14 +325,13 @@
                 if (idx > -1) { const block = this.blocks[idx]; block.cells.forEach(c => this.board[c.z][c.y][c.x] = 0); this.blocks.splice(idx, 1); return block; } return null;
             }
             canPick(block) {
-                if (block.isFixed) return false;
                 for (let c of block.cells) {
                     if (c.z >= 4) continue;
                     if (this.board[c.z+1][c.y][c.x] !== 0) { const isSelf = block.cells.some(sc => sc.x===c.x && sc.y===c.y && sc.z===c.z+1); if (!isSelf) return false; }
                 } return true;
             }
             pickBlock(x, y, z) {
-                const block = this.blocks.find(b => b.player === this.currentPlayer && !b.isFixed && b.cells.some(c => c.x===x && c.y===y && c.z===z));
+                const block = this.blocks.find(b => b.player === this.currentPlayer && b.cells.some(c => c.x===x && c.y===y && c.z===z));
                 if (!block) return { ok: false, msg: "내 블록 아님" };
                 if (!this.canPick(block)) return { ok: false, msg: "불가: 위에 블록 있음" };
                 this.saveState(); this.selectedBlockOriginalCells = JSON.parse(JSON.stringify(block.cells)); this.removeBlock(block.id); this.selectedBlock = block; return { ok: true, block: block };
@@ -345,7 +344,10 @@
                     if (cSet.size === oSet.size) { let same = true; for(let k of cSet) if(!oSet.has(k)) { same=false; break; } if(same) return { ok:false, msg:"제자리 불가" }; }
                 }
                 for(let c of cells) { if(c.x<0||c.x>4||c.y<0||c.y>4||c.z<0||c.z>4) return {ok:false, msg:"범위 초과"}; if(this.board[c.z][c.y][c.x]!==0) return {ok:false, msg:"이미 있음"}; }
-                if (!isMovement && this.turnCount < 2) { const restricted = ["0,3","0,4","1,4","3,0","4,0","4,1"]; if(cells.some(c=>c.z===0 && restricted.includes(`${c.x},${c.y}`))) return {ok:false, msg:"금지 구역"}; }
+                if (!isMovement && this.turnCount < 2) {
+                    const restricted = (player === 1) ? ["0,3","0,4","1,4"] : ["3,0","4,0","4,1"];
+                    if (cells.some(c => c.z === 0 && restricted.includes(`${c.x},${c.y}`))) return {ok:false, msg:"금지 구역"};
+                }
                 if ([1,3].indexOf(cells.filter(c=>c.z===0).length) === -1) return {ok:false, msg:"접지 위반"};
                 for(let c of cells) { if(c.z>0) { const hasSup = this.board[c.z-1][c.y][c.x]!==0; const isSelf = cells.some(sc=>sc.x===c.x && sc.y===c.y && sc.z===c.z-1); if(!hasSup && !isSelf) return {ok:false, msg:"지지대 필요"}; } }
                 return {ok:true};

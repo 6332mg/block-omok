@@ -9,7 +9,8 @@ ort.env.wasm.simd = false;
 const BOARD_SIZE = 5;
 const ACTION_COUNT = 200;
 const PLANE = BOARD_SIZE * BOARD_SIZE;
-const RESTRICTED_XY = new Set([15, 20, 21, 3, 4, 9]); // (0,3)(0,4)(1,4)(3,0)(4,0)(4,1)
+const RESTRICTED_WHITE_XY = new Set([15, 20, 21]); // (0,3)(0,4)(1,4)
+const RESTRICTED_BLACK_XY = new Set([3, 4, 9]); // (3,0)(4,0)(4,1)
 const LINE_WEIGHTS = [0, 1, 4, 16, 64, 5000];
 
 let neuralSession = null;
@@ -33,6 +34,9 @@ function idx2(x, y) {
 }
 function idx3(x, y, z) {
   return z * PLANE + y * BOARD_SIZE + x;
+}
+function restrictedSetByPlayer(player) {
+  return player === 1 ? RESTRICTED_WHITE_XY : RESTRICTED_BLACK_XY;
 }
 function buildLines() {
   const lines = [];
@@ -81,7 +85,7 @@ function cloneState(state) {
   };
 }
 
-function checkValidity(board, cells, turnCount, ignoreSet = null) {
+function checkValidity(board, player, cells, turnCount, ignoreSet = null) {
   for (let i = 0; i < cells.length; i++) {
     const c = cells[i];
     if (c.x < 0 || c.x > 4 || c.y < 0 || c.y > 4 || c.z < 0 || c.z > 4) return false;
@@ -112,9 +116,10 @@ function checkValidity(board, cells, turnCount, ignoreSet = null) {
   }
 
   if (!ignoreSet && turnCount < 2) {
+    const restricted = restrictedSetByPlayer(player);
     for (let i = 0; i < cells.length; i++) {
       const c = cells[i];
-      if (c.z === 0 && RESTRICTED_XY.has(idx2(c.x, c.y))) return false;
+      if (c.z === 0 && restricted.has(idx2(c.x, c.y))) return false;
     }
   }
 
@@ -126,7 +131,7 @@ function getCells(px, py, shapeIdx) {
   return s.map((d) => ({ x: px + d.x, y: py + d.y, z: d.z }));
 }
 
-function getLandingCells(board, actionIdx, turnCount, ignoreSet = null) {
+function getLandingCells(board, actionIdx, player, turnCount, ignoreSet = null) {
   const shapeIdx = actionIdx % 8;
   const px = Math.floor(actionIdx / 8) % 5;
   const py = Math.floor(actionIdx / 40);
@@ -142,7 +147,7 @@ function getLandingCells(board, actionIdx, turnCount, ignoreSet = null) {
       }
     }
     if (out) break;
-    if (checkValidity(board, test, turnCount, ignoreSet)) {
+    if (checkValidity(board, player, test, turnCount, ignoreSet)) {
       return { cells: test, shapeIdx, actionIdx };
     }
   }
@@ -150,7 +155,6 @@ function getLandingCells(board, actionIdx, turnCount, ignoreSet = null) {
 }
 
 function canPickBlock(board, block) {
-  if (block.isFixed) return false;
   for (let i = 0; i < block.cells.length; i++) {
     const c = block.cells[i];
     if (c.z >= 4) continue;
@@ -286,7 +290,7 @@ function boardUndo(board, backup) {
 
 function hasImmediatePlacementWin(board, player, turnCount) {
   for (let i = 0; i < ACTION_COUNT; i++) {
-    const res = getLandingCells(board, i, turnCount, null);
+    const res = getLandingCells(board, i, player, turnCount, null);
     if (!res) continue;
     const move = { type: "place", cells: res.cells, shapeIdx: res.shapeIdx, actionIdx: i };
     const backup = boardApplyMove(board, move, player);
@@ -336,7 +340,7 @@ function generateCandidates(state) {
   if (phase === "PLACEMENT") {
     if ((blocksLeft[player] || 0) <= 0) return candidates;
     for (let i = 0; i < ACTION_COUNT; i++) {
-      const res = getLandingCells(board, i, turnCount, null);
+      const res = getLandingCells(board, i, player, turnCount, null);
       if (res) {
         candidates.push({
           type: "place",
@@ -351,12 +355,12 @@ function generateCandidates(state) {
 
   for (let bi = 0; bi < blocks.length; bi++) {
     const b = blocks[bi];
-    if (b.player !== player || b.isFixed) continue;
+    if (b.player !== player) continue;
     if (!canPickBlock(board, b)) continue;
 
     const ignoreSet = new Set(b.cells.map((c) => idx3(c.x, c.y, c.z)));
     for (let i = 0; i < ACTION_COUNT; i++) {
-      const res = getLandingCells(board, i, turnCount, ignoreSet);
+      const res = getLandingCells(board, i, player, turnCount, ignoreSet);
       if (!res) continue;
       if (sameCells(res.cells, b.cells)) continue;
 
@@ -394,7 +398,6 @@ function applyMoveToState(state, move) {
     const bi = state.blocks.findIndex((b) => b.id === move.fromId && b.player === player);
     if (bi < 0) return false;
     const block = state.blocks[bi];
-    if (block.isFixed) return false;
 
     for (let i = 0; i < block.cells.length; i++) {
       const c = block.cells[i];
