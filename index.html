@@ -28,6 +28,7 @@
         .btn-hint { background: #f1c40f; border-color: #f39c12; color: #fff; }
         .btn-ai-toggle { background: #ecf0f1; color: #7f8c8d; }
         .btn-ai-toggle.active { background: #2ecc71; color: white; border-color: #27ae60; }
+        #ai-engine-select { min-width: 90px; }
         .btn-resign { background: #e74c3c; color: white; border-color: #c0392b; }
         
         .phase-badge { font-size: 0.75rem; color: white; padding: 4px 8px; border-radius: 4px; background: #333; vertical-align: middle; }
@@ -42,7 +43,7 @@
         .key-hint { font-size: 0.7rem; color: #666; margin-top: 5px; font-weight: bold; text-shadow: 1px 1px 0 #fff; }
 
         .fab-rules { pointer-events: auto; position: absolute; left: 20px; bottom: 30px; width: 45px; height: 45px; background: #3498db; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-        .log-panel { pointer-events: none; position: absolute; left: 20px; bottom: 85px; background: rgba(0,0,0,0.6); color: #fff; width: 250px; height: 120px; border-radius: 8px; padding: 10px; overflow: hidden; font-family: monospace; font-size: 0.8rem; display: flex; flex-direction: column-reverse; text-shadow: 1px 1px 2px black; }
+        .log-panel { pointer-events: auto; position: absolute; left: 20px; bottom: 85px; background: rgba(0,0,0,0.6); color: #fff; width: 250px; height: 140px; border-radius: 8px; padding: 10px; overflow-y: auto; overflow-x: hidden; font-family: monospace; font-size: 0.8rem; display: block; text-shadow: 1px 1px 2px black; line-height: 1.35; }
         
         #lobby-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); z-index: 200; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: auto; }
         .lobby-box { text-align: center; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); width: 85%; max-width: 400px; }
@@ -142,6 +143,11 @@
                 <div class="row-lower">
                     <div id="my-player-badge">싱글 모드</div>
                     <div style="display:flex; gap:5px;">
+                        <select id="ai-engine-select" class="btn" onchange="window.setAIEngine(this.value)">
+                            <option value="mcts" selected>MCTS</option>
+                            <option value="rl">RL</option>
+                            <option value="hybrid">Hybrid</option>
+                        </select>
                         <button id="btn-ai-toggle" class="btn btn-ai-toggle" onclick="window.toggleAIMode()">🤖 AI 대전</button>
                         <button class="btn btn-hint" onclick="window.askAI()">💡 힌트</button>
                     </div>
@@ -197,49 +203,112 @@
 
         // 🌟 [핵심 변경] AI 연산을 담당할 Worker 생성 (화면 멈춤 방지)
         const aiWorker = new Worker('ai_worker.js');
+        let aiEngineMode = 'mcts';
+        let aiReqSeq = 0;
+        let latestPlayReqId = 0;
+        let latestHintReqId = 0;
+        let gameSessionId = 1;
+        let roomUnsubs = [];
+
+        function strategyLabel(strategy) {
+            const map = {
+                winning_move: 'winning_move',
+                blocking_move: 'blocking_move',
+                puct_hybrid: 'puct_hybrid',
+                mcts: 'mcts',
+                neural_network: 'neural_network',
+                neural_fallback: 'neural_fallback',
+                random_fallback: 'random_fallback',
+                bad_state: 'bad_state',
+                none: 'none',
+            };
+            return map[strategy] || strategy || 'unknown';
+        }
+
+        function engineLabel(engine) {
+            if (engine === 'rl') return 'RL';
+            if (engine === 'hybrid') return 'Hybrid';
+            return 'MCTS';
+        }
+
+        function pushRoomUnsub(unsub) {
+            if (typeof unsub === 'function') roomUnsubs.push(unsub);
+        }
+
+        function clearRoomListeners() {
+            for (const unsub of roomUnsubs) {
+                try { unsub(); } catch (_) {}
+            }
+            roomUnsubs = [];
+        }
+
+        function beginNewSession() {
+            gameSessionId += 1;
+            aiReqSeq = 0;
+            latestPlayReqId = 0;
+            latestHintReqId = 0;
+            clearHintGhost();
+            const l = document.getElementById('ai-loader');
+            if (l) l.style.display = 'none';
+        }
         
         // Worker로부터 메시지 수신 (비동기 처리)
         aiWorker.onmessage = function(e) {
-            const msg = e.data;
-            if(msg.type === 'INIT_OK') {
-                document.getElementById('ai-status-text').innerText = "✅ AI 장착 완료!";
-                document.getElementById('ai-status-text').style.color = "#2ecc71";
-                console.log("AI Ready");
+            const msg = e.data || {};
+            if (msg.type === 'INIT_OK') {
+                document.getElementById('ai-status-text').innerText = 'AI ready';
+                document.getElementById('ai-status-text').style.color = '#2ecc71';
+                return;
             }
-            else if(msg.type === 'INIT_FAIL') {
-                document.getElementById('ai-status-text').innerText = "❌ AI 로드 실패 (파일확인)";
+            if (msg.type === 'INIT_FAIL') {
+                document.getElementById('ai-status-text').innerText = 'AI load failed';
                 console.error(msg.error);
+                return;
             }
-            else if(msg.type === 'MOVE') {
-                // AI가 착수를 완료함
-                document.getElementById('ai-loader').style.display = 'none';
-                const move = msg.move;
-                
-                if(move) {
-                    console.log(`🤖 AI 착수 (${msg.strategy})`);
-                    if(move.type === 'place') {
-                        logic.confirmMove(move.cells, move.shapeIdx);
-                    } else {
-                        const b = logic.blocks.find(x => x.id === move.fromId);
-                        if(b) {
-                            logic.selectedBlockOriginalCells = JSON.parse(JSON.stringify(b.cells));
-                            logic.removeBlock(b.id);
-                            logic.selectedBlock = b;
-                            logic.confirmMove(move.cells, move.shapeIdx);
-                        }
-                    }
-                    renderBoard();
-                    updateUI();
-                    updateGhost();
-                    
-                    // 승리 체크 알림
-                    if(logic.winner !== 0) {
-                        setTimeout(() => alert(`게임 종료! 승자: ${logic.winner === 1 ? '흑(AI)' : '백(나)'}`), 100);
-                    }
+            if (msg.type !== 'MOVE') return;
+            if (typeof msg.sessionId === 'number' && msg.sessionId !== gameSessionId) return;
+
+            const mode = msg.mode || 'play';
+            const move = msg.move;
+            const label = `[AI/${engineLabel(msg.engine)}] ${strategyLabel(msg.strategy)}`;
+
+            if (mode === 'hint') {
+                if (msg.reqId !== latestHintReqId) return;
+                aiLoader.style.display = 'none';
+                clearHintGhost();
+                if (move && move.cells) {
+                    drawGhost(move.cells, 0x3498db, hintGroup, 0.75);
+                    log(`${label} hint`);
                 } else {
-                    alert("AI가 더 이상 둘 곳이 없다고 합니다 (기권)");
+                    log(`${label} no hint`);
                 }
+                return;
             }
+
+            if (msg.reqId !== latestPlayReqId) return;
+            aiLoader.style.display = 'none';
+            clearHintGhost();
+            if (!move) {
+                log(`${label} no move`);
+                return;
+            }
+            if (logic.winner !== 0 || logic.currentPlayer === myPlayerNum) return;
+
+            if (move.type === 'place') {
+                logic.confirmMove(move.cells, move.shapeIdx);
+            } else {
+                const b = logic.blocks.find(x => x.id === move.fromId);
+                if (!b) return;
+                logic.selectedBlockOriginalCells = JSON.parse(JSON.stringify(b.cells));
+                logic.removeBlock(b.id);
+                logic.selectedBlock = b;
+                logic.confirmMove(move.cells, move.shapeIdx);
+            }
+
+            log(`${label} move`);
+            renderBoard();
+            updateUI();
+            updateGhost();
         };
 
         // 초기 AI 로드 요청 (절대 경로 생성하여 전달)
@@ -273,12 +342,21 @@
         let isOnline = false;
         let isSpectator = false;
         let myNickname = "Player";
-        let p1Name = "흑", p2Name = "백";
+        let p1Name = "Black";
+        let p2Name = "White";
 
-        window.goHome = () => { if(confirm("게임에서 나가시겠습니까?")) { location.hash = ""; } };
+        window.goHome = () => {
+            if(confirm("게임에서 나가시겠습니까?")) {
+                clearRoomListeners();
+                beginNewSession();
+                location.hash = "";
+            }
+        };
         window.addEventListener('popstate', () => {
             const hash = location.hash;
             if(!hash) {
+                clearRoomListeners();
+                beginNewSession();
                 document.getElementById('game-canvas').style.display='none';
                 document.getElementById('ui-layer').style.display='none';
                 document.getElementById('lobby-overlay').style.display='flex';
@@ -287,8 +365,11 @@
                 document.getElementById('lobby-wait').style.display='none';
                 document.getElementById('win-rate-bar-container').style.display='none';
                 document.getElementById('win-rate-text').style.display='none';
-                isOnline = false; isSpectator = false; logic.reset(); 
-                myRoomId = null; myPlayerNum = 0;
+                isOnline = false;
+                isSpectator = false;
+                myRoomId = null;
+                myPlayerNum = 0;
+                resetForNewMatch(false);
             }
         });
 
@@ -390,28 +471,71 @@
         const logEl = document.getElementById('log-console'); 
         const aiLoader = document.getElementById('ai-loader');
 
-        // 🌟 [Worker와 통신하는 함수]
-        async function runAI() {
-            if (logic.winner !== 0) return; // 게임 끝났으면 실행 X
-
-            const l = document.getElementById('ai-loader');
-            l.innerText = "🤖 AI 생각중...";
-            l.style.display = 'block';
-            
-            // 🌟 중요: Logic 클래스 통째로 보내지 말고 데이터만 추출해서 전송 (직렬화 문제 방지)
-            const gameState = {
-                board: logic.board,
-                blocks: logic.blocks,      // 블록들의 id, cells, player 정보만 있으면 됨
-                blocksLeft: logic.blocksLeft,
-                phase: logic.phase,
-                player: logic.currentPlayer,
-                turnCount: logic.turnCount
-            };
-
-            aiWorker.postMessage({ type: 'THINK', gameState: gameState });
+        function clearHintGhost() {
+            while(hintGroup.children.length > 0) hintGroup.remove(hintGroup.children[0]);
         }
 
-        function log(msg) { const div = document.createElement('div'); div.innerText = `> ${msg}`; logEl.insertBefore(div, logEl.firstChild); if(logEl.children.length > 4) logEl.removeChild(logEl.lastChild); }
+        function clearLog() {
+            logEl.innerHTML = '';
+        }
+
+        function resetForNewMatch(withLog = true) {
+            beginNewSession();
+            logic.reset();
+            hoveredBlockId = null;
+            currentShapeIdx = 0;
+            clearHintGhost();
+            clearThinkingIndicators();
+            renderBoard();
+            updateUI();
+            updateWinRateUI();
+            if (withLog) {
+                clearLog();
+                log('new match');
+            }
+        }
+
+        window.setAIEngine = (mode) => {
+            aiEngineMode = (mode === 'rl' || mode === 'hybrid') ? mode : 'mcts';
+            const sel = document.getElementById('ai-engine-select');
+            if (sel && sel.value !== aiEngineMode) sel.value = aiEngineMode;
+            log(`engine: ${engineLabel(aiEngineMode)}`);
+        };
+
+        // 🌟 [Worker와 통신하는 함수]
+        async function runAI(mode = 'play') {
+            if (logic.winner !== 0) return;
+            if (mode === 'play') {
+                if (isOnline || isSpectator) return;
+                if (!logic.aiMode) return;
+                if (logic.currentPlayer === myPlayerNum) return;
+            }
+
+            const reqId = ++aiReqSeq;
+            if (mode === 'hint') latestHintReqId = reqId;
+            else latestPlayReqId = reqId;
+
+            aiLoader.innerText = mode === 'hint' ? 'hint...' : 'AI thinking...';
+            aiLoader.style.display = 'block';
+
+            aiWorker.postMessage({
+                type: 'THINK',
+                reqId,
+                mode,
+                sessionId: gameSessionId,
+                engine: aiEngineMode,
+                gameState: {
+                    board: logic.board,
+                    blocks: logic.blocks,
+                    blocksLeft: logic.blocksLeft,
+                    phase: logic.phase,
+                    player: logic.currentPlayer,
+                    turnCount: logic.turnCount
+                }
+            });
+        }
+
+        function log(msg) { const div = document.createElement('div'); div.innerText = `> ${msg}`; logEl.appendChild(div); logEl.scrollTop = logEl.scrollHeight; }
 
         const scene = new THREE.Scene(); scene.background = new THREE.Color(0xdfe4ea);
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100); camera.position.set(0, 14, 12); camera.lookAt(0,0,0);
@@ -469,31 +593,50 @@
 
         window.showSideSelection = () => { myNickname = document.getElementById('nickname-input').value || "Player"; p1Name = myNickname; p2Name = "AI Robot"; document.getElementById('lobby-main').style.display='none'; document.getElementById('lobby-side').style.display='block'; };
         window.startSingleGame = (playerNum) => {
-            isOnline = false; myPlayerNum = playerNum; if(myPlayerNum === 2) { p1Name = "AI Robot"; p2Name = myNickname; }
+            clearRoomListeners();
+            isOnline = false;
+            isSpectator = false;
+            myRoomId = null;
+            myPlayerNum = playerNum;
+            if(myPlayerNum === 2) { p1Name = 'AI Robot'; p2Name = myNickname; }
+            else { p1Name = myNickname; p2Name = 'AI Robot'; }
             enterGameMode("single");
-            const badge = document.getElementById('my-player-badge'); badge.innerText = "👤 싱글 모드"; badge.style.background = "#333";
-            logic.aiMode = true; updateUI(); updateWinRateUI();
-            if(myPlayerNum === 2) { setTimeout(runAI, 500); }
+            const badge = document.getElementById('my-player-badge'); badge.innerText = 'single mode'; badge.style.background = "#333";
+            document.getElementById('btn-ai-toggle').style.display = 'inline-block';
+            document.getElementById('btn-reset').style.display = 'inline-block';
+            resetForNewMatch(true);
+            logic.aiMode = true;
+            updateUI();
+            updateWinRateUI();
+            if(myPlayerNum === 2) { setTimeout(() => runAI('play'), 500); }
         };
 
+
         window.createRoom = () => {
+            clearRoomListeners();
+            isSpectator = false;
+            resetForNewMatch(true);
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let code = ''; for(let i=0; i<6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
-            myRoomId = code; myPlayerNum = 1; myNickname = document.getElementById('nickname-input').value || "Host"; p1Name = myNickname; p2Name = "대기중...";
-            set(ref(db, 'rooms/' + code), { status: 'waiting', board: logic.serialize(), undoReq: null, hintReq: null, players: { 1: myNickname, 2: "" }, gameReq: null });
+            myRoomId = code; myPlayerNum = 1; myNickname = document.getElementById('nickname-input').value || 'Host'; p1Name = myNickname; p2Name = 'waiting...';
+            set(ref(db, 'rooms/' + code), { status: 'waiting', board: logic.serialize(), undoReq: null, hintReq: null, players: { 1: myNickname, 2: '' }, gameReq: null });
             document.getElementById('lobby-main').style.display = 'none'; document.getElementById('lobby-wait').style.display = 'block'; document.getElementById('display-room-code').innerText = code;
-            onValue(ref(db, 'rooms/' + code + '/players/2'), (snap) => { if (snap.val()) { p2Name = snap.val(); update(ref(db, 'rooms/' + code), { status: 'playing' }); startGameMulti(1); } });
+            pushRoomUnsub(onValue(ref(db, 'rooms/' + code + '/players/2'), (snap) => { if (snap.val()) { p2Name = snap.val(); update(ref(db, 'rooms/' + code), { status: 'playing' }); startGameMulti(1); } }));
         };
+
         window.joinRoom = () => {
-            const code = document.getElementById('room-code-input').value.toUpperCase(); if(code.length !== 6) { alert("코드 6자리!"); return; } myNickname = document.getElementById('nickname-input').value || "Guest";
+            clearRoomListeners();
+            const code = document.getElementById('room-code-input').value.toUpperCase(); if(code.length !== 6) { alert("code 6"); return; } myNickname = document.getElementById('nickname-input').value || 'Guest';
             get(child(ref(db), 'rooms/' + code)).then((snap) => {
                 if (snap.exists()) {
+                    resetForNewMatch(true);
                     const roomData = snap.val();
                     if (roomData.status === 'playing') {
-                        if (confirm("방이 꽉 찼습니다. 관전하시겠습니까?")) { myRoomId = code; myPlayerNum = 3; isSpectator = true; p1Name = roomData.players[1]; p2Name = roomData.players[2]; startGameMulti(3); }
-                    } else { myRoomId = code; myPlayerNum = 2; p1Name = roomData.players[1]; p2Name = myNickname; update(ref(db, 'rooms/' + code + '/players'), { 2: myNickname }); startGameMulti(2); }
-                } else alert("방 없음");
+                        if (confirm("spectate?")) { myRoomId = code; myPlayerNum = 3; isSpectator = true; p1Name = roomData.players[1]; p2Name = roomData.players[2]; startGameMulti(3); }
+                    } else { myRoomId = code; myPlayerNum = 2; isSpectator = false; p1Name = roomData.players[1]; p2Name = myNickname; update(ref(db, 'rooms/' + code + '/players'), { 2: myNickname }); startGameMulti(2); }
+                } else alert("room 없음");
             });
         };
+
 
         function enterGameMode(hash) {
             location.hash = hash;
@@ -501,55 +644,47 @@
         }
 
         function startGameMulti(pNum) {
+            clearRoomListeners();
+            beginNewSession();
             enterGameMode("multi");
             isOnline = true; document.getElementById('btn-ai-toggle').style.display = 'none'; document.getElementById('btn-reset').style.display = 'none';
             const badge = document.getElementById('my-player-badge');
-            if (isSpectator) { badge.innerText = "👀 관전 모드"; badge.style.background = "#7f8c8d"; } else { badge.innerText = pNum===1 ? "🌐 Host (흑)" : "🌐 Guest (백)"; badge.style.background = pNum===1 ? "#e74c3c" : "#2ecc71"; }
-            
-            onValue(ref(db, 'rooms/' + myRoomId + '/board'), (snap) => { 
-                if (snap.val()) { 
-                    if(logic.turnCount > 0) logic.saveState();
-                    logic.deserialize(snap.val()); renderBoard(); updateUI(); updateWinRateUI(); checkMultiGameEnd(); 
-                } 
-            });
-            onValue(ref(db, 'rooms/' + myRoomId + '/players'), (snap) => { const players = snap.val(); if(players) { p1Name=players[1]; p2Name=players[2]; updateUI(); } });
-            
-            onValue(ref(db, 'rooms/' + myRoomId + '/undoReq'), (snap) => { 
+            if (isSpectator) { badge.innerText = 'spectator'; badge.style.background = '#7f8c8d'; } else { badge.innerText = pNum===1 ? 'Host(black)' : 'Guest(white)'; badge.style.background = pNum===1 ? '#e74c3c' : '#2ecc71'; }
+
+            pushRoomUnsub(onValue(ref(db, 'rooms/' + myRoomId + '/board'), (snap) => {
+                if (snap.val()) { logic.deserialize(snap.val()); renderBoard(); updateUI(); updateWinRateUI(); checkMultiGameEnd(); }
+            }));
+            pushRoomUnsub(onValue(ref(db, 'rooms/' + myRoomId + '/players'), (snap) => { const players = snap.val(); if(players) { p1Name=players[1]; p2Name=players[2]; updateUI(); } }));
+
+            pushRoomUnsub(onValue(ref(db, 'rooms/' + myRoomId + '/undoReq'), (snap) => {
                 const req = snap.val(); if(!req) { document.getElementById('req-modal').style.display='none'; return; }
-                if(req.status==='rejected' && req.requester===myPlayerNum) { alert("무르기 거절됨"); set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null); }
-                if(req.status==='pending' && req.requester!==myPlayerNum && !isSpectator) { 
-                    showReqModal("상대방이 무르기를 요청했습니다.", () => {
-                        logic.undo(); logic.undo(); 
-                        set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize()); 
-                        set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null);
-                    }, () => {
-                        update(ref(db, 'rooms/' + myRoomId + '/undoReq'), {status:'rejected'});
-                    });
+                if(req.status==='rejected' && req.requester===myPlayerNum) { alert("Undo rejected"); set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null); }
+                if(req.status==='pending' && req.requester!==myPlayerNum && !isSpectator) {
+                    showReqModal("Undo requested", () => { logic.undo(); logic.undo(); set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize()); set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null); }, () => { update(ref(db, 'rooms/' + myRoomId + '/undoReq'), {status:'rejected'}); });
                 }
-            });
-            onValue(ref(db, 'rooms/' + myRoomId + '/hintReq'), (snap) => { 
+            }));
+
+            pushRoomUnsub(onValue(ref(db, 'rooms/' + myRoomId + '/hintReq'), (snap) => {
                 const req = snap.val(); if(!req) { document.getElementById('req-modal').style.display='none'; return; }
-                if(req.status==='granted' && req.requester===myPlayerNum) { alert("힌트 허용됨!"); set(ref(db, 'rooms/' + myRoomId + '/hintReq'), null); window.actuallyShowHint(); }
-                if(req.status==='rejected' && req.requester===myPlayerNum) { alert("힌트 거절됨"); set(ref(db, 'rooms/' + myRoomId + '/hintReq'), null); }
-                if(req.status==='pending' && req.requester!==myPlayerNum && !isSpectator) { 
-                    showReqModal(`상대방(${req.requester===1?p1Name:p2Name})이 AI 힌트를 요청했습니다.`, () => {
-                        update(ref(db, 'rooms/' + myRoomId + '/hintReq'), {status:'granted'});
-                    }, () => {
-                        update(ref(db, 'rooms/' + myRoomId + '/hintReq'), {status:'rejected'});
-                    });
+                if(req.status==='granted' && req.requester===myPlayerNum) { alert("Hint granted"); set(ref(db, 'rooms/' + myRoomId + '/hintReq'), null); window.actuallyShowHint(); }
+                if(req.status==='rejected' && req.requester===myPlayerNum) { alert("Hint rejected"); set(ref(db, 'rooms/' + myRoomId + '/hintReq'), null); }
+                if(req.status==='pending' && req.requester!==myPlayerNum && !isSpectator) {
+                    showReqModal(`Hint request from ${req.requester===1?p1Name:p2Name}`, () => { update(ref(db, 'rooms/' + myRoomId + '/hintReq'), {status:'granted'}); }, () => { update(ref(db, 'rooms/' + myRoomId + '/hintReq'), {status:'rejected'}); });
                 }
-            });
-            onValue(ref(db, 'rooms/' + myRoomId + '/gameReq'), (snap) => {
+            }));
+
+            pushRoomUnsub(onValue(ref(db, 'rooms/' + myRoomId + '/gameReq'), (snap) => {
                 const req = snap.val(); if(!req) return;
                 if(req.type === 'restart') {
-                    alert("재대결이 시작됩니다! (흑백 교체)");
-                    const newBoard = new GameLogic(); 
+                    alert("Rematch");
+                    const newBoard = new GameLogic();
                     set(ref(db, 'rooms/' + myRoomId + '/board'), newBoard.serialize());
                     set(ref(db, 'rooms/' + myRoomId + '/gameReq'), null);
                     document.getElementById('end-modal').style.display = 'none';
                 }
-            });
+            }));
         }
+
 
         function showReqModal(msg, onYes, onNo) {
             document.getElementById('req-msg').innerText = msg;
@@ -599,31 +734,18 @@
             }
         };
         
-        window.actuallyShowHint = async () => { 
-            const l=document.getElementById('ai-loader'); l.innerText="💡 힌트..."; l.style.display='block'; 
-            // Worker에게 힌트 요청 (타입은 THINK와 같음)
-            aiWorker.postMessage({ 
-                type: 'THINK', 
-                gameState: {
-                    board: logic.board,
-                    blocks: logic.blocks,
-                    blocksLeft: logic.blocksLeft,
-                    phase: logic.phase,
-                    player: logic.currentPlayer,
-                    turnCount: logic.turnCount
-                }
-            });
-            
-            // 힌트 표시는 Worker가 아니라 메인 스레드에서 처리해야 하므로
-            // Worker 메시지 수신부에서 'MOVE' 타입을 받으면 힌트로 처리하는 로직을 분기해야 함.
-            // 하지만 구조상 간단히 하기 위해 'MOVE' 메시지 수신부에서 AI 모드가 아니면(즉 힌트요청이면) 
-            // 착수 대신 고스트만 보여주도록 수정해야 함.
-            // (일단 이 코드는 AI 대전 중심으로 수정되었으므로 힌트는 AI가 대신 둬주는 걸로 동작할 수 있음)
+        window.actuallyShowHint = async () => {
+            if (logic.winner !== 0) return;
+            if (isOnline && (isSpectator || logic.currentPlayer !== myPlayerNum)) return;
+            clearHintGhost();
+            runAI('hint');
         };
 
-        window.toggleAIMode = () => { logic.aiMode=!logic.aiMode; updateUI(); if(!isOnline && logic.aiMode && logic.currentPlayer !== myPlayerNum) runAI(); };
-        window.undo = () => { if(!isOnline && logic.undo()) { log("무르기"); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); updateWinRateUI(); } };
-        window.resetGame = () => { if(!isOnline && confirm("초기화?")) { logic.reset(); hoveredBlockId=null; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); renderBoard(); updateUI(); updateWinRateUI(); log("초기화됨"); } };
+
+
+        window.toggleAIMode = () => { logic.aiMode=!logic.aiMode; updateUI(); if(!isOnline && logic.aiMode && logic.currentPlayer !== myPlayerNum) runAI('play'); };
+        window.undo = () => { if(!isOnline && logic.undo()) { log("Undo"); hoveredBlockId=null; clearHintGhost(); renderBoard(); updateUI(); updateWinRateUI(); } };
+        window.resetGame = () => { if(!isOnline && confirm("reset?")) { resetForNewMatch(true); } };
         window.resign = () => {
             if(!isOnline || isSpectator || logic.winner !== 0) return;
             if(confirm("정말 기권하시겠습니까? (상대방의 승리로 기록됩니다)")) {
@@ -641,7 +763,7 @@
         window.addEventListener('mousedown', ()=>downTime=Date.now()); window.addEventListener('mouseup', ()=>{ if(Date.now()-downTime<250) click(); });
         function click() { if(logic.winner!==0 || isSpectator || (isOnline && logic.currentPlayer!==myPlayerNum)) return; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); if(logic.phase==='MOVEMENT' && !logic.selectedBlock) { if(hoveredBlockId) { const b=logic.blocks.find(x=>x.id===hoveredBlockId); if(b) { const r=logic.pickBlock(b.cells[0].x, b.cells[0].y, b.cells[0].z); if(r.ok) { currentShapeIdx=r.block.shapeIdx; hoveredBlockId=null; renderBoard(); } else log(r.msg); } } return; } if(hoverX!==-1) { const sh=SHAPES[currentShapeIdx%8]; const cells=sh.map(c=>({x:hoverX+c.x, y:hoverY+c.y, z:c.z})); const chk=logic.checkValidity(logic.currentPlayer, cells, logic.phase==='MOVEMENT'); if(chk.ok) { logic.confirmMove(cells, currentShapeIdx%8); log("착수"); renderBoard(); updateUI(); updateGhost(); setTimeout(()=>{ if(logic.winner!==0) alert(`게임 종료! 승자: ${logic.winner}`); },200); } else log(chk.msg); } }
         function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
-        renderBoard(); updateUI(); animate();
+        window.setAIEngine(aiEngineMode); renderBoard(); updateUI(); animate();
     </script>
 </body>
-</html>```
+</html>

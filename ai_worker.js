@@ -684,11 +684,13 @@ self.onmessage = async function (e) {
   if (msg.type !== "THINK") return;
 
   const reqId = typeof msg.reqId === "number" ? msg.reqId : null;
+  const sessionId = typeof msg.sessionId === "number" ? msg.sessionId : null;
   const mode = msg.mode || "play";
+  const engine = msg.engine === "rl" ? "rl" : (msg.engine === "hybrid" ? "hybrid" : "mcts");
   const gs = msg.gameState;
 
   if (!gs || !gs.board || !gs.blocksLeft || gs.player == null || !gs.phase) {
-    self.postMessage({ type: "MOVE", reqId, mode, move: null, strategy: "bad_state" });
+    self.postMessage({ type: "MOVE", reqId, sessionId, mode, engine, move: null, strategy: "bad_state" });
     return;
   }
 
@@ -701,47 +703,54 @@ self.onmessage = async function (e) {
   const candidates = generateCandidates(state);
 
   if (candidates.length > 0) {
-    const winMove = findImmediateWinningMove(state.board, candidates, state.player);
-    if (winMove) {
-      finalMove = winMove;
-      finalStrategy = "winning_move";
-    } else if (state.phase === "PLACEMENT") {
-      const blockMove = findBlockingPlacementMove(state.board, candidates, state.player, state.turnCount);
-      if (blockMove) {
-        finalMove = blockMove;
-        finalStrategy = "blocking_move";
+    if (engine !== "rl") {
+      const winMove = findImmediateWinningMove(state.board, candidates, state.player);
+      if (winMove) {
+        finalMove = winMove;
+        finalStrategy = "winning_move";
+      } else if (state.phase === "PLACEMENT") {
+        const blockMove = findBlockingPlacementMove(state.board, candidates, state.player, state.turnCount);
+        if (blockMove) {
+          finalMove = blockMove;
+          finalStrategy = "blocking_move";
+        }
       }
     }
 
     if (!finalMove) {
-      const priorMap = await buildRootPriorMap(state, candidates);
+      const priorMap = engine === "mcts" ? null : await buildRootPriorMap(state, candidates);
 
-      const opts =
-        state.phase === "PLACEMENT"
-          ? {
-              cpuct: 1.35,
-              maxSims: mode === "hint" ? 220 : 320,
-              timeMs: mode === "hint" ? 500 : 750,
-              maxDepth: 8,
-              rootWidth: 36,
-              innerWidth: 16,
-            }
-          : {
-              cpuct: 1.2,
-              maxSims: mode === "hint" ? 140 : 200,
-              timeMs: mode === "hint" ? 350 : 500,
-              maxDepth: 6,
-              rootWidth: 28,
-              innerWidth: 12,
-            };
-
-      const mcts = runPUCT(state, candidates, priorMap, opts);
-      if (mcts.move) {
-        finalMove = mcts.move;
-        finalStrategy = priorMap ? "puct_hybrid" : "mcts";
-      } else {
+      if (engine === "rl") {
         finalMove = pickBestByPrior(candidates, priorMap) || candidates[Math.floor(Math.random() * candidates.length)];
-        finalStrategy = priorMap ? "neural_fallback" : "random_fallback";
+        finalStrategy = priorMap ? "neural_network" : "random_fallback";
+      } else {
+        const opts =
+          state.phase === "PLACEMENT"
+            ? {
+                cpuct: 1.35,
+                maxSims: mode === "hint" ? 220 : 320,
+                timeMs: mode === "hint" ? 500 : 750,
+                maxDepth: 8,
+                rootWidth: 36,
+                innerWidth: 16,
+              }
+            : {
+                cpuct: 1.2,
+                maxSims: mode === "hint" ? 140 : 200,
+                timeMs: mode === "hint" ? 350 : 500,
+                maxDepth: 6,
+                rootWidth: 28,
+                innerWidth: 12,
+              };
+
+        const mcts = runPUCT(state, candidates, priorMap, opts);
+        if (mcts.move) {
+          finalMove = mcts.move;
+          finalStrategy = priorMap ? "puct_hybrid" : "mcts";
+        } else {
+          finalMove = pickBestByPrior(candidates, priorMap) || candidates[Math.floor(Math.random() * candidates.length)];
+          finalStrategy = priorMap ? "neural_fallback" : "random_fallback";
+        }
       }
     }
   }
@@ -749,7 +758,9 @@ self.onmessage = async function (e) {
   self.postMessage({
     type: "MOVE",
     reqId,
+    sessionId,
     mode,
+    engine,
     move: finalMove,
     strategy: finalStrategy,
   });
