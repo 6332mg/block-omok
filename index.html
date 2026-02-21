@@ -1164,7 +1164,7 @@
                     const glowingMat = new THREE.MeshStandardMaterial({
                         color: baseColor,
                         emissive: isP1 ? 0xff0055 : 0x00ffff,
-                        emissiveIntensity: isHover ? 1.0 : 0.4,
+                        emissiveIntensity: isHover ? 2.5 : 1.2,
                         roughness: 0.5
                     });
                     return glowingMat;
@@ -1560,8 +1560,8 @@
         composer.addPass(renderPass);
 
         const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-        bloomPass.threshold = 0.2;
-        bloomPass.strength = 1.2;
+        bloomPass.threshold = 0.85;
+        bloomPass.strength = 1.0;
         bloomPass.radius = 0.5;
         composer.addPass(bloomPass);
 
@@ -1613,7 +1613,7 @@
 
         function clearThinkingIndicators() { while (thinkingGroup.children.length > 0) thinkingGroup.remove(thinkingGroup.children[0]); }
         const hitPlane = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide })); hitPlane.rotation.x = -Math.PI / 2; hitPlane.position.y = 0.5; scene.add(hitPlane);
-        scene.add(new THREE.GridHelper(5, 5, 0xbdc3c7, 0xecf0f1)); const basePlate = new THREE.Mesh(new THREE.BoxGeometry(5, 0.1, 5), new THREE.MeshStandardMaterial({ color: 0xdeb887 })); basePlate.position.y = -0.05; basePlate.receiveShadow = true; scene.add(basePlate);
+        scene.add(new THREE.GridHelper(5, 5, 0xbdc3c7, 0xecf0f1)); const basePlate = new THREE.Mesh(new THREE.BoxGeometry(5, 0.1, 5), new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.9 })); basePlate.position.y = -0.05; basePlate.receiveShadow = true; scene.add(basePlate);
         let currentShapeIdx = 0, hoverX = -1, hoverY = -1, hoveredBlockId = null;
 
         function updateUI() {
@@ -1671,8 +1671,9 @@
             isSpectator = false;
             myRoomId = null;
             myPlayerNum = playerNum;
-            if (myPlayerNum === 2) { p1Name = 'AI Robot'; p2Name = myNickname; }
-            else { p1Name = myNickname; p2Name = 'AI Robot'; }
+            const mySkin = currentUser ? (currentUser.equipped_skin || 0) : 0;
+            if (myPlayerNum === 2) { p1Name = 'AI Robot'; p1Skin = 0; p2Name = myNickname; p2Skin = mySkin; }
+            else { p1Name = myNickname; p1Skin = mySkin; p2Name = 'AI Robot'; p2Skin = 0; }
             enterGameMode("single");
             const badge = document.getElementById('my-player-badge'); badge.innerText = 'single mode'; badge.style.background = "#333";
             document.getElementById('btn-ai-toggle').style.display = 'inline-block';
@@ -1693,7 +1694,8 @@
             myRoomId = code; myPlayerNum = 1;
             myNickname = currentUser ? currentUser.nickname : myNickname;
             p1Name = myNickname; p2Name = 'waiting...';
-            set(ref(db, 'rooms/' + code), { status: 'waiting', board: logic.serialize(), undoReq: null, hintReq: null, players: { 1: myNickname, 2: '' }, gameReq: null, chat: {} });
+            const mySkin = currentUser ? (currentUser.equipped_skin || 0) : 0;
+            set(ref(db, 'rooms/' + code), { status: 'waiting', board: logic.serialize(), undoReq: null, hintReq: null, players: { 1: myNickname, 2: '' }, skins: { 1: mySkin, 2: 0 }, gameReq: null, chat: {} });
             document.getElementById('lobby-main').style.display = 'none'; document.getElementById('lobby-wait').style.display = 'block'; document.getElementById('display-room-code').innerText = code;
             pushRoomUnsub(onValue(ref(db, 'rooms/' + code + '/players/2'), (snap) => { if (snap.val()) { p2Name = snap.val(); update(ref(db, 'rooms/' + code), { status: 'playing' }); startGameMulti(1); } }));
         };
