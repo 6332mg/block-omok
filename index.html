@@ -1199,7 +1199,7 @@
         let pendingGuestName = null;
         window.playAsGuest = () => {
             const inputName = document.getElementById('guest-nickname').value.trim();
-            pendingGuestName = inputName || null; // 빈 입력이면 null 처리
+            pendingGuestName = inputName || ""; // 빈 입력이면 빈 문자열 처리
             signInAnonymously(auth).catch((error) => {
                 alert("게스트 로그인 실패: " + error.message);
                 pendingGuestName = null;
@@ -1664,7 +1664,7 @@
         }
         function drawGhost(cells, col, grp, op) { const mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op }); const geo = new RoundedBoxGeometry(0.96, 0.96, 0.96, 4, 0.1); cells.forEach(c => { const m = new THREE.Mesh(geo, mat); m.position.set(c.x - 2, c.z + 0.52, c.y - 2); grp.add(m); }); }
 
-        window.showSideSelection = () => { myNickname = document.getElementById('nickname-input').value || "Player"; p1Name = myNickname; p2Name = "AI Robot"; document.getElementById('lobby-main').style.display = 'none'; document.getElementById('lobby-side').style.display = 'block'; };
+        window.showSideSelection = () => { p1Name = myNickname; p2Name = "AI Robot"; document.getElementById('lobby-main').style.display = 'none'; document.getElementById('lobby-side').style.display = 'block'; };
         window.startSingleGame = (playerNum) => {
             clearRoomListeners();
             isOnline = false;
@@ -1691,7 +1691,7 @@
             resetForNewMatch(true);
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let code = ''; for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
             myRoomId = code; myPlayerNum = 1;
-            myNickname = currentUser ? currentUser.nickname : (isGuest ? myNickname : document.getElementById('nickname-input').value || 'Host');
+            myNickname = currentUser ? currentUser.nickname : myNickname;
             p1Name = myNickname; p2Name = 'waiting...';
             set(ref(db, 'rooms/' + code), { status: 'waiting', board: logic.serialize(), undoReq: null, hintReq: null, players: { 1: myNickname, 2: '' }, gameReq: null, chat: {} });
             document.getElementById('lobby-main').style.display = 'none'; document.getElementById('lobby-wait').style.display = 'block'; document.getElementById('display-room-code').innerText = code;
@@ -1704,7 +1704,7 @@
 
             if (code.length < 5) { alert("올바른 코드를 입력하세요."); return; }
 
-            myNickname = currentUser ? currentUser.nickname : (isGuest ? myNickname : document.getElementById('nickname-input').value || 'Guest');
+            myNickname = currentUser ? currentUser.nickname : myNickname;
 
             get(child(ref(db), 'rooms/' + code)).then((snap) => {
                 if (snap.exists()) {
