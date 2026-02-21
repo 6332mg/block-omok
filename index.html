@@ -648,6 +648,12 @@
             font-size: 0.8rem;
         }
 
+        .admin-skin-btn {
+            background: #f39c12;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+
         /* Chat Styles */
         .chat-panel {
             pointer-events: auto;
@@ -965,7 +971,13 @@
                     <label>플레이:</label>
                     <input type="number" id="admin-edit-plays" style="width:60px;">
                 </div>
-                <button class="admin-action-btn" style="background:#2ecc71;" onclick="adminSaveUser()">저장/적용</button>
+                <div style="margin-bottom:10px; border-top: 1px solid #ccc; padding-top: 10px;">
+                    <label style="font-weight:bold; display:block; margin-bottom:5px;">스킨 지급 (해금 처리):</label>
+                    <div id="admin-skin-give-area">
+                        <!-- Skin buttons added via JS -->
+                    </div>
+                </div>
+                <button class="admin-action-btn" style="background:#2ecc71;" onclick="adminSaveUser()">전적 저장/적용</button>
             </div>
         </div>
     </div>
@@ -1295,7 +1307,12 @@
                 btn.className = 'skin-btn';
 
                 // Check unlock logic
-                const isUnlocked = (wins >= skin.reqWins && plays >= skin.reqPlays) || (userData.unlocked_skins && userData.unlocked_skins.includes(skin.id));
+                let isUnlocked = false;
+                if (isAdmin) {
+                    isUnlocked = true; // Admin has all skins
+                } else {
+                    isUnlocked = (wins >= skin.reqWins && plays >= skin.reqPlays) || (userData.unlocked_skins && userData.unlocked_skins.includes(skin.id));
+                }
                 const isEquipped = (equipped === skin.id);
 
                 if (isUnlocked) btn.classList.add('unlocked');
@@ -1817,6 +1834,8 @@
 
         // --- Admin Functions ---
         let adminLoadedUserId = null;
+        let adminLoadedUserSkins = [];
+
         window.adminLoadUser = () => {
             const uid = document.getElementById('admin-search').value.trim();
             if (!uid) return;
@@ -1824,15 +1843,51 @@
                 if (snap.exists()) {
                     const data = snap.val();
                     adminLoadedUserId = uid;
+                    adminLoadedUserSkins = data.unlocked_skins || [0];
                     document.getElementById('admin-detail-id').innerText = `User: ${data.nickname}`;
                     document.getElementById('admin-edit-wins').value = data.wins;
                     document.getElementById('admin-edit-plays').value = data.plays;
+
+                    // Render skin give buttons
+                    const skinArea = document.getElementById('admin-skin-give-area');
+                    skinArea.innerHTML = '';
+                    SKIN_CONFIGS.forEach(skin => {
+                        const btn = document.createElement('button');
+                        btn.className = 'admin-action-btn admin-skin-btn';
+
+                        // Check if naturally unlocked by stats or in unlocked_skins array
+                        const isNaturallyUnlocked = (data.wins >= skin.reqWins && data.plays >= skin.reqPlays);
+                        const isUnlockedAlready = isNaturallyUnlocked || adminLoadedUserSkins.includes(skin.id);
+
+                        if (isUnlockedAlready) {
+                            btn.innerText = `${skin.name} (보유함)`;
+                            btn.style.background = '#95a5a6';
+                            btn.disabled = true;
+                        } else {
+                            btn.innerText = `${skin.name} 지급`;
+                            btn.onclick = () => window.adminGiveSkin(skin.id, skin.name);
+                        }
+                        skinArea.appendChild(btn);
+                    });
+
                     document.getElementById('admin-user-details').style.display = 'block';
                 } else {
                     alert("User not found!");
                     document.getElementById('admin-user-details').style.display = 'none';
                 }
             });
+        };
+
+        window.adminGiveSkin = (skinId, skinName) => {
+            if (!adminLoadedUserId) return;
+            if (!adminLoadedUserSkins.includes(skinId)) {
+                const updatedSkins = [...adminLoadedUserSkins, skinId];
+                update(ref(db, 'users/' + adminLoadedUserId), { unlocked_skins: updatedSkins }).then(() => {
+                    alert(`${skinName} 스킨을 지급했습니다!`);
+                    adminLoadedUserSkins = updatedSkins;
+                    window.adminLoadUser(); // Reload to refresh buttons
+                }).catch(e => alert("스킨 지급 실패: " + e.message));
+            }
         };
 
         window.adminSaveUser = () => {
