@@ -1182,13 +1182,14 @@
                 case 1:
                     // 1단계: 마인크래프트풍 큐브 유리
                     mat = new THREE.MeshPhysicalMaterial({
-                        color: isP1 ? 0x222222 : 0xffffff,
+                        color: isP1 ? 0x111111 : 0xdddddd, // 내부 불투명도에 맞춰 베이스 색상 조정
                         metalness: 0.1,
-                        roughness: isHover ? 0.05 : 0.15,
-                        transmission: 0.85,
+                        roughness: isHover ? 0.05 : 0.2, // 완전히 투명하기보다 반투명한 질감 강조
+                        transmission: 0.5, // 0.85 -> 0.5 (투과율을 대폭 낮춰 불투명하게 만듦)
                         thickness: 1.5,
-                        ior: 1.5,
+                        ior: 2.0, // 빛의 산란 높임
                         transparent: true,
+                        opacity: 0.8, // 자체적인 불투명도(Opacity) 추가
                         map: createMinecraftGlassTexture() // 외곽선 텍스처
                     });
                     maxGeo = boxGeo;
@@ -1197,13 +1198,13 @@
                 case 2:
                     // 2단계: 뾰족한 각진 크리스탈
                     mat = new THREE.MeshPhysicalMaterial({
-                        color: isP1 ? 0x111111 : 0xffffff,
+                        color: isP1 ? 0x111111 : 0xa0a0a0,
                         metalness: 0.3,
                         roughness: 0.05,
                         transmission: 0.9,
                         thickness: 1.5,
                         ior: 2.4,
-                        emissive: isP1 ? 0x330000 : 0x003333,
+                        emissive: isP1 ? 0x330000 : 0x002233, // 백돌 크리스탈도 호버 시 은은한 푸른/하얀 빛
                         emissiveIntensity: isHover ? 0.5 : 0.0,
                         flatShading: true // 표면의 각진 느낌을 살림
                     });
@@ -1213,7 +1214,7 @@
                 case 3:
                     // 3단계: 메탈
                     mat = new THREE.MeshStandardMaterial({
-                        color: isP1 ? 0x333333 : 0xffffff, // 흑돌 메탈도 완전히 까맣지 않게
+                        color: isP1 ? 0x333333 : 0x999999, // 백금 느낌을 위해 100% 흰색 대신 연한 은회색
                         metalness: 1.0,
                         roughness: isHover ? 0.1 : 0.3,
                         envMapIntensity: 1.5
@@ -1225,9 +1226,9 @@
                 default:
                     // 0단계: 기본
                     mat = new THREE.MeshStandardMaterial({
-                        color: isP1 ? 0x1a1a1a : 0xf5f5f5,
-                        roughness: 0.4,
-                        metalness: 0.1,
+                        color: isP1 ? 0x1a1a1a : 0xb0b0b0, // 백돌의 기본 색상을 너무 밝지 않은 회색톤으로 낮춤 (환경맵 반사로 인해 렌더링시 하얗게 보임)
+                        roughness: 0.6, // 거칠기를 높여서 빛 반사를 더 분산시킴
+                        metalness: 0.05,
                         emissive: isHover ? (isP1 ? 0x333333 : 0x222222) : 0x000000
                     });
                     maxGeo = roundedGeo;
