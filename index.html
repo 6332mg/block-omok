@@ -990,6 +990,7 @@
         import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
         import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
         import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, set, onValue, update, get, child, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
@@ -1143,40 +1144,61 @@
 
         // --- 3D Skin Definitions ---
         const SKIN_CONFIGS = [
-            { id: 0, name: "기본", icon: "🪵", reqWins: 0, reqPlays: 0 },
-            { id: 1, name: "크리스탈", icon: "💎", reqWins: 0, reqPlays: 5 },
-            { id: 2, name: "네온", icon: "⚡", reqWins: 3, reqPlays: 0 },
-            { id: 3, name: "골드", icon: "🏆", reqWins: 10, reqPlays: 0 }
+            { id: 0, name: "기본", icon: "⚫", reqWins: 0, reqPlays: 0 },
+            { id: 1, name: "유리", icon: "🧊", reqWins: 0, reqPlays: 5 },
+            { id: 2, name: "크리스탈", icon: "💎", reqWins: 3, reqPlays: 0 },
+            { id: 3, name: "메탈", icon: "⚙️", reqWins: 10, reqPlays: 0 }
         ];
 
         function getMaterialForSkin(skinIndex, isP1, isHover) {
-            const baseColor = isP1 ? (isHover ? 0x555555 : 0x222222) : (isHover ? 0xffffff : 0xeeeeee);
-
+            // isP1: 흑돌, !isP1: 백돌
             switch (skinIndex) {
-                case 1: // Crystal (Glass)
+                case 1:
+                    // 1단계: 유리 
                     return new THREE.MeshPhysicalMaterial({
-                        color: isP1 ? 0x111111 : 0xffffff,
-                        metalness: 0.1, roughness: 0.1,
-                        transmission: 0.9, thickness: 1.5,
-                        transparent: true, opacity: isHover ? 0.6 : 1.0
+                        color: isP1 ? 0x222222 : 0xffffff,
+                        metalness: 0.1,
+                        roughness: isHover ? 0.05 : 0.15, // 호버 시 표면이 더 매끄러워져 반사광이 선명해짐
+                        transmission: 0.85,
+                        thickness: 1.5,
+                        ior: 1.5, // 일반 유리의 굴절률
+                        transparent: true
                     });
-                case 2: // Neon Cyberpunk
-                    const glowingMat = new THREE.MeshStandardMaterial({
-                        color: baseColor,
-                        emissive: isP1 ? 0xff0055 : 0x00ffff,
-                        emissiveIntensity: isHover ? 2.5 : 1.2,
-                        roughness: 0.5
+
+                case 2:
+                    // 2단계: 크리스탈 (흑요석 vs 다이아몬드)
+                    return new THREE.MeshPhysicalMaterial({
+                        color: isP1 ? 0x050505 : 0xffffff,
+                        metalness: 0.2,
+                        roughness: 0.0,
+                        transmission: 0.95, // 극강의 투명도
+                        thickness: 2.0,
+                        ior: 2.4, // 다이아몬드/크리스탈의 높은 굴절률
+                        clearcoat: 1.0, // 표면에 한 층 더 코팅된 느낌
+                        clearcoatRoughness: isHover ? 0.0 : 0.1,
+                        emissive: isP1 ? 0x111111 : 0x222222,
+                        emissiveIntensity: isHover ? 0.3 : 0.0 // 호버 시 영롱하게 자체 발광
                     });
-                    return glowingMat;
-                case 3: // Gold (Metallic)
+
+                case 3:
+                    // 3단계: 프리미엄 메탈 (블랙 티타늄 vs 백금)
                     return new THREE.MeshStandardMaterial({
-                        color: isP1 ? 0x8c7300 : 0xffd700, // Dark gold vs Bright gold
-                        metalness: 1.0, roughness: 0.2,
-                        emissive: isHover ? 0x332200 : 0x000000
+                        color: isP1 ? 0x1a1a1a : 0xf0f0f5,
+                        metalness: 1.0, // 완전한 금속
+                        roughness: isHover ? 0.15 : 0.25, // 약간의 무광 처리로 고급스러움 강조
+                        envMapIntensity: 1.5 // 주변 환경 반사율을 높여 금속 질감 극대화
                     });
-                case 0: // Basic
+
+                case 0:
                 default:
-                    return new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.3 });
+                    // 0단계: 기본 (레진/플라스틱)
+                    const baseColor = isP1 ? 0x1a1a1a : 0xf5f5f5;
+                    return new THREE.MeshStandardMaterial({
+                        color: baseColor,
+                        roughness: 0.4,
+                        metalness: 0.0,
+                        emissive: isHover ? (isP1 ? 0x222222 : 0x111111) : 0x000000 // 호버 시 살짝 밝아짐
+                    });
             }
         }
 
@@ -1545,7 +1567,7 @@
         function log(msg) { const div = document.createElement('div'); div.innerText = `> ${msg}`; logEl.appendChild(div); logEl.scrollTop = logEl.scrollHeight; }
 
         const logEl = document.getElementById('log-console');
-        const scene = new THREE.Scene(); scene.background = new THREE.Color(0x1a1a2e);
+        const scene = new THREE.Scene(); scene.background = new THREE.Color(0x2c3e50); // 살짝 밝아진 배경 (Slate Blue/Dark Gray)
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100); camera.position.set(0, 14, 12); camera.lookAt(0, 0, 0);
         const canvasEl = document.getElementById('game-canvas');
         const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -1553,6 +1575,11 @@
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.shadowMap.enabled = true;
         canvasEl.appendChild(renderer.domElement);
+
+        // 환경 맵 (Environment Map) 세팅 (사실적인 반사를 위해 필수)
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        pmremGenerator.compileEquirectangularShader();
+        scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
 
         // --- Post-Processing (Bloom) ---
         const composer = new EffectComposer(renderer);
