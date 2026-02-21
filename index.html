@@ -764,7 +764,21 @@
                 <div class="profile-name" id="display-profile-name">Guest</div>
                 <div class="profile-stats">승률: <span id="display-profile-winrate">0.0%</span> | 플레이: <span
                         id="display-profile-plays">0</span></div>
-                <button class="lobby-btn btn-logout" onclick="logout()">로그아웃</button>
+
+                <!-- Skin Selection Integration -->
+                <div id="skin-section" class="skin-section" style="display: none;">
+                    <div class="skin-section-title">스킨 보관함</div>
+                    <div class="skin-selector-container" id="skin-selector-container">
+                        <!-- Skins rendered via JS -->
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button class="lobby-btn btn-logout" id="btn-admin-dashboard"
+                        style="display: none; background: #e74c3c; color: white;"
+                        onclick="document.getElementById('admin-modal').style.display='flex'">⚙️ 관리자 메뉴</button>
+                    <button class="lobby-btn btn-logout" onclick="logout()">로그아웃</button>
+                </div>
             </div>
 
             <!-- Auth Area (Hidden if logged in) -->
@@ -1158,6 +1172,10 @@
         let currentUser = null; // { id, nickname, wins, plays, unlocked_skins, equipped_skin }
         let isGuest = false;
 
+        // --- Admin Roles ---
+        const ADMIN_EMAILS = ["medartistmg@gmail.com"];
+        let isAdmin = false;
+
         // --- Auth Functions ---
         window.handleGoogleLogin = () => {
             const provider = new GoogleAuthProvider();
@@ -1183,6 +1201,12 @@
                 const uid = user.uid;
                 const isAnon = user.isAnonymous;
 
+                // 게스트이고 방금 '게스트 플레이' 버튼을 누른 게 아니라면 (페이지 새로고침으로 인한 자동 로그인인 경우)
+                if (isAnon && pendingGuestName === null && currentUser === null) {
+                    signOut(auth);
+                    return; // 바로 종료하여 자동 로그인을 막음
+                }
+
                 let name = user.displayName || "Player";
                 if (isAnon) {
                     name = pendingGuestName ? pendingGuestName : ("Guest-" + uid.substring(0, 4));
@@ -1192,6 +1216,11 @@
                 // Retrieve or initialize user data in Realtime Database
                 const userRef = ref(db, 'users/' + uid);
                 get(userRef).then((snap) => {
+                    const email = user.email || "";
+                    if (ADMIN_EMAILS.includes(email)) {
+                        isAdmin = true;
+                    }
+
                     if (!snap.exists()) {
                         const initData = { nickname: name, wins: 0, plays: 0, unlocked_skins: [0], equipped_skin: 0 };
                         set(userRef, initData).then(() => {
@@ -1206,8 +1235,10 @@
                 // User is signed out.
                 currentUser = null;
                 isGuest = false;
+                isAdmin = false;
                 document.getElementById('auth-area').style.display = 'block';
                 document.getElementById('profile-area').style.display = 'none';
+                document.getElementById('btn-admin-dashboard').style.display = 'none';
                 document.getElementById('lobby-main').style.display = 'none';
             }
         });
@@ -1243,6 +1274,53 @@
                     document.getElementById('display-profile-plays').innerText = updated.plays;
                     renderSkinSelector(currentUser);
                 }
+            });
+
+            if (isAdmin) {
+                document.getElementById('btn-admin-dashboard').style.display = 'block';
+            }
+        }
+
+        function renderSkinSelector(userData) {
+            const container = document.getElementById('skin-selector-container');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const equipped = userData.equipped_skin || 0;
+            const wins = userData.wins || 0;
+            const plays = userData.plays || 0;
+
+            SKIN_CONFIGS.forEach(skin => {
+                const btn = document.createElement('div');
+                btn.className = 'skin-btn';
+
+                // Check unlock logic
+                const isUnlocked = (wins >= skin.reqWins && plays >= skin.reqPlays) || (userData.unlocked_skins && userData.unlocked_skins.includes(skin.id));
+                const isEquipped = (equipped === skin.id);
+
+                if (isUnlocked) btn.classList.add('unlocked');
+                if (isEquipped) btn.classList.add('equipped');
+
+                btn.innerHTML = `
+                    <div class="skin-icon">${skin.icon}</div>
+                    <div class="skin-name">${skin.name}</div>
+                `;
+
+                if (isUnlocked) {
+                    btn.onclick = () => {
+                        if (!isEquipped) {
+                            update(ref(db, 'users/' + userData.id), { equipped_skin: skin.id });
+                        }
+                    };
+                } else {
+                    btn.onclick = () => {
+                        let msg = `${skin.name} 스킨 해금 조건:\n`;
+                        if (skin.reqWins > 0) msg += `- 승리 ${skin.reqWins}회 필요 (현재 ${wins}회)\n`;
+                        if (skin.reqPlays > 0) msg += `- 플레이 ${skin.reqPlays}회 필요 (현재 ${plays}회)\n`;
+                        alert(msg);
+                    };
+                }
+                container.appendChild(btn);
             });
         }
 
@@ -1606,12 +1684,6 @@
         window.joinRoom = () => {
             clearRoomListeners();
             const code = document.getElementById('room-code-input').value.toUpperCase();
-            // Admin Check
-            if (code === "ADMIN99") {
-                document.getElementById('admin-modal').style.display = 'flex';
-                document.getElementById('room-code-input').value = "";
-                return;
-            }
 
             if (code.length < 5) { alert("올바른 코드를 입력하세요."); return; }
 
@@ -1627,8 +1699,9 @@
                         if (confirm("spectate?")) { myRoomId = code; myPlayerNum = 3; isSpectator = true; p1Name = roomData.players[1]; p2Name = roomData.players[2]; startGameMulti(3); }
                     } else {
                         myRoomId = code; myPlayerNum = 2; isSpectator = false; p1Name = roomData.players[1]; p2Name = myNickname;
+                        const defaultSkin = currentUser ? currentUser.equipped_skin || 0 : 0;
                         update(ref(db, 'rooms/' + code + '/players'), { 2: myNickname });
-                        update(ref(db, 'rooms/' + code + '/skins'), { 2: guestSkin });
+                        update(ref(db, 'rooms/' + code + '/skins'), { 2: defaultSkin });
                         startGameMulti(2);
                     }
                 } else alert("room 없음");
