@@ -1150,56 +1150,90 @@
             { id: 3, name: "메탈", icon: "⚙️", reqWins: 10, reqPlays: 0 }
         ];
 
-        function getMaterialForSkin(skinIndex, isP1, isHover) {
-            // isP1: 흑돌, !isP1: 백돌
+        // 유리에 테두리 라인을 그리는 텍스처 (마인크래프트 느낌)
+        function createMinecraftGlassTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64;
+            const context = canvas.getContext('2d');
+            context.fillStyle = 'rgba(255,255,255,0.0)';
+            context.fillRect(0, 0, 64, 64);
+            context.strokeStyle = 'rgba(255,255,255,0.4)';
+            context.lineWidth = 4;
+            context.strokeRect(2, 2, 60, 60);
+            context.fillStyle = 'rgba(255,255,255,0.2)';
+            context.fillRect(8, 8, 12, 12); // 반사 하이라이트 느낌
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.magFilter = THREE.NearestFilter; // 픽셀 느낌
+            return tex;
+        }
+
+        function getSkinAssets(skinIndex, isP1, isHover) {
+            // isP1: true면 흑돌, false면 백돌
+            let mat, maxGeo;
+            const size = 0.96; // 기본 블록 크기
+
+            // 공통 지오메트리
+            const roundedGeo = new RoundedBoxGeometry(size, size, size, 4, 0.1);
+            const boxGeo = new THREE.BoxGeometry(size, size, size); // 마인크래프트 같은 직육면체
+            // 뾰족한 크리스탈 느낌의 지오메트리 (Icosahedron)
+            const crystalGeo = new THREE.IcosahedronGeometry(size * 0.6, 0);
+
             switch (skinIndex) {
                 case 1:
-                    // 1단계: 유리 
-                    return new THREE.MeshPhysicalMaterial({
+                    // 1단계: 마인크래프트풍 큐브 유리
+                    mat = new THREE.MeshPhysicalMaterial({
                         color: isP1 ? 0x222222 : 0xffffff,
                         metalness: 0.1,
-                        roughness: isHover ? 0.05 : 0.15, // 호버 시 표면이 더 매끄러워져 반사광이 선명해짐
+                        roughness: isHover ? 0.05 : 0.15,
                         transmission: 0.85,
                         thickness: 1.5,
-                        ior: 1.5, // 일반 유리의 굴절률
-                        transparent: true
+                        ior: 1.5,
+                        transparent: true,
+                        map: createMinecraftGlassTexture() // 외곽선 텍스처
                     });
+                    maxGeo = boxGeo;
+                    break;
 
                 case 2:
-                    // 2단계: 크리스탈 (흑요석 vs 다이아몬드)
-                    return new THREE.MeshPhysicalMaterial({
-                        color: isP1 ? 0x050505 : 0xffffff,
-                        metalness: 0.2,
-                        roughness: 0.0,
-                        transmission: 0.95, // 극강의 투명도
-                        thickness: 2.0,
-                        ior: 2.4, // 다이아몬드/크리스탈의 높은 굴절률
-                        clearcoat: 1.0, // 표면에 한 층 더 코팅된 느낌
-                        clearcoatRoughness: isHover ? 0.0 : 0.1,
-                        emissive: isP1 ? 0x111111 : 0x222222,
-                        emissiveIntensity: isHover ? 0.3 : 0.0 // 호버 시 영롱하게 자체 발광
+                    // 2단계: 뾰족한 각진 크리스탈
+                    mat = new THREE.MeshPhysicalMaterial({
+                        color: isP1 ? 0x111111 : 0xffffff,
+                        metalness: 0.3,
+                        roughness: 0.05,
+                        transmission: 0.9,
+                        thickness: 1.5,
+                        ior: 2.4,
+                        emissive: isP1 ? 0x330000 : 0x003333,
+                        emissiveIntensity: isHover ? 0.5 : 0.0,
+                        flatShading: true // 표면의 각진 느낌을 살림
                     });
+                    maxGeo = crystalGeo;
+                    break;
 
                 case 3:
-                    // 3단계: 프리미엄 메탈 (블랙 티타늄 vs 백금)
-                    return new THREE.MeshStandardMaterial({
-                        color: isP1 ? 0x1a1a1a : 0xf0f0f5,
-                        metalness: 1.0, // 완전한 금속
-                        roughness: isHover ? 0.15 : 0.25, // 약간의 무광 처리로 고급스러움 강조
-                        envMapIntensity: 1.5 // 주변 환경 반사율을 높여 금속 질감 극대화
+                    // 3단계: 메탈
+                    mat = new THREE.MeshStandardMaterial({
+                        color: isP1 ? 0x333333 : 0xffffff, // 흑돌 메탈도 완전히 까맣지 않게
+                        metalness: 1.0,
+                        roughness: isHover ? 0.1 : 0.3,
+                        envMapIntensity: 1.5
                     });
+                    maxGeo = roundedGeo;
+                    break;
 
                 case 0:
                 default:
-                    // 0단계: 기본 (레진/플라스틱)
-                    const baseColor = isP1 ? 0x1a1a1a : 0xf5f5f5;
-                    return new THREE.MeshStandardMaterial({
-                        color: baseColor,
+                    // 0단계: 기본
+                    mat = new THREE.MeshStandardMaterial({
+                        color: isP1 ? 0x1a1a1a : 0xf5f5f5,
                         roughness: 0.4,
-                        metalness: 0.0,
-                        emissive: isHover ? (isP1 ? 0x222222 : 0x111111) : 0x000000 // 호버 시 살짝 밝아짐
+                        metalness: 0.1,
+                        emissive: isHover ? (isP1 ? 0x333333 : 0x222222) : 0x000000
                     });
+                    maxGeo = roundedGeo;
+                    break;
             }
+            return { material: mat, geometry: maxGeo, isConnecting: skinIndex === 0 || skinIndex === 3 || skinIndex === 1 };
         }
 
         // --- Account System Variables ---
@@ -1601,8 +1635,8 @@
 
         const lobbyBlocks = [];
         const lobbyMats = [
-            getMaterialForSkin(0, true, false), getMaterialForSkin(1, false, false),
-            getMaterialForSkin(2, true, false), getMaterialForSkin(3, false, false)
+            getSkinAssets(0, true, false).material, getSkinAssets(1, false, false).material,
+            getSkinAssets(2, true, false).material, getSkinAssets(3, false, false).material
         ];
         for (let i = 0; i < 30; i++) {
             const wrapper = new THREE.Group();
@@ -1672,24 +1706,66 @@
 
         function renderBoard() {
             for (let i = boardGroup.children.length - 1; i >= 0; i--) boardGroup.remove(boardGroup.children[i]);
-            const geo = new RoundedBoxGeometry(0.98, 0.98, 0.98, 4, 0.1);
             logic.blocks.forEach(b => {
                 const isHov = b.id === hoveredBlockId;
                 const isP1 = b.player === 1;
                 const skinIdx = isP1 ? p1Skin : p2Skin;
-                const mat = getMaterialForSkin(skinIdx, isP1, isHov);
+                const assets = getSkinAssets(skinIdx, isP1, isHov);
 
                 const grp = new THREE.Group(); grp.userData = { id: b.id, isBlock: true };
-                b.cells.forEach(c => { const m = new THREE.Mesh(geo, mat); m.position.set(c.x - 2, c.z + 0.5, c.y - 2); m.castShadow = true; m.receiveShadow = true; m.userData = { id: b.id, parentGroup: grp }; grp.add(m); });
-                for (let i = 0; i < b.cells.length; i++) for (let j = i + 1; j < b.cells.length; j++) { const c1 = b.cells[i], c2 = b.cells[j]; if (Math.abs(c1.x - c2.x) + Math.abs(c1.y - c2.y) + Math.abs(c1.z - c2.z) === 1) { let bg; if (Math.abs(c1.x - c2.x) === 1) bg = new THREE.BoxGeometry(1, 0.8, 0.8); else if (Math.abs(c1.y - c2.y) === 1) bg = new THREE.BoxGeometry(0.8, 0.8, 1); else bg = new THREE.BoxGeometry(0.8, 1, 0.8); const br = new THREE.Mesh(bg, mat); br.position.set((c1.x + c2.x) / 2 - 2, (c1.z + c2.z) / 2 + 0.5, (c1.y + c2.y) / 2 - 2); grp.add(br); } } boardGroup.add(grp);
+                b.cells.forEach(c => {
+                    const m = new THREE.Mesh(assets.geometry, assets.material);
+                    m.position.set(c.x - 2, c.z + 0.5, c.y - 2);
+                    if (skinIdx === 2) {
+                        // 크리스탈 뾰족한 모양을 랜덤하게 회전시켜 더 불규칙하게
+                        m.rotation.set(Math.random(), Math.random(), Math.random());
+                    }
+                    m.castShadow = true; m.receiveShadow = true; m.userData = { id: b.id, parentGroup: grp }; grp.add(m);
+                });
+
+                // 블록을 이어주는 연결부 그리기 (크리스탈 등은 개별 조각이 낫기 때문에 제외 가능성)
+                if (assets.isConnecting) {
+                    for (let i = 0; i < b.cells.length; i++) {
+                        for (let j = i + 1; j < b.cells.length; j++) {
+                            const c1 = b.cells[i], c2 = b.cells[j];
+                            if (Math.abs(c1.x - c2.x) + Math.abs(c1.y - c2.y) + Math.abs(c1.z - c2.z) === 1) {
+                                let bg;
+                                if (Math.abs(c1.x - c2.x) === 1) bg = new THREE.BoxGeometry(1, 0.8, 0.8);
+                                else if (Math.abs(c1.y - c2.y) === 1) bg = new THREE.BoxGeometry(0.8, 0.8, 1);
+                                else bg = new THREE.BoxGeometry(0.8, 1, 0.8);
+                                const br = new THREE.Mesh(bg, assets.material);
+                                br.position.set((c1.x + c2.x) / 2 - 2, (c1.z + c2.z) / 2 + 0.5, (c1.y + c2.y) / 2 - 2);
+                                grp.add(br);
+                            }
+                        }
+                    }
+                }
+                boardGroup.add(grp);
             });
         }
         function updateGhost() {
             while (ghostGroup.children.length > 0) ghostGroup.remove(ghostGroup.children[0]);
             if (logic.winner !== 0 || isSpectator || (isOnline && logic.currentPlayer !== myPlayerNum) || (logic.phase === 'MOVEMENT' && !logic.selectedBlock) || hoverX === -1) return;
-            const sh = SHAPES[currentShapeIdx % 8]; const cells = sh.map(c => ({ x: hoverX + c.x, y: hoverY + c.y, z: c.z })); const chk = logic.checkValidity(logic.currentPlayer, cells, logic.phase === 'MOVEMENT'); drawGhost(cells, chk.ok ? 0x2ecc71 : 0xe74c3c, ghostGroup, 0.6);
+            const sh = SHAPES[currentShapeIdx % 8]; const cells = sh.map(c => ({ x: hoverX + c.x, y: hoverY + c.y, z: c.z })); const chk = logic.checkValidity(logic.currentPlayer, cells, logic.phase === 'MOVEMENT');
+
+            const isP1 = logic.currentPlayer === 1;
+            const skinIdx = isP1 ? p1Skin : p2Skin;
+            const assets = getSkinAssets(skinIdx, isP1, true); // Hover mode = true
+
+            drawGhost(cells, chk.ok ? 0x2ecc71 : 0xe74c3c, ghostGroup, 0.6, assets.geometry, skinIdx === 2);
         }
-        function drawGhost(cells, col, grp, op) { const mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op }); const geo = new RoundedBoxGeometry(0.96, 0.96, 0.96, 4, 0.1); cells.forEach(c => { const m = new THREE.Mesh(geo, mat); m.position.set(c.x - 2, c.z + 0.52, c.y - 2); grp.add(m); }); }
+        function drawGhost(cells, col, grp, op, forcedGeo = null, isCrystal = false) {
+            const mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op });
+            const geo = forcedGeo || new RoundedBoxGeometry(0.96, 0.96, 0.96, 4, 0.1);
+            cells.forEach(c => {
+                const m = new THREE.Mesh(geo, mat);
+                m.position.set(c.x - 2, c.z + 0.52, c.y - 2);
+                if (isCrystal) {
+                    m.rotation.set(Math.random(), Math.random(), Math.random());
+                }
+                grp.add(m);
+            });
+        }
 
         window.showSideSelection = () => { p1Name = myNickname; p2Name = "AI Robot"; document.getElementById('lobby-main').style.display = 'none'; document.getElementById('lobby-side').style.display = 'block'; };
         window.startSingleGame = (playerNum) => {
