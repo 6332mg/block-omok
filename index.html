@@ -1,108 +1,816 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <title>대학전쟁: 블록 오목 (God Tier AI)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script>
+        // Removed debug error handlers
+    </script>
     <style>
-        body { margin: 0; overflow: hidden; background: #dfe4ea; font-family: 'Pretendard', sans-serif; user-select: none; -webkit-touch-callout: none; }
-        #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh; z-index: 1; touch-action: none; }
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh; z-index: 10; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
-        
-        .top-bar { pointer-events: auto; display: flex; gap: 10px; background: rgba(255,255,255,0.95); padding: 10px 15px; margin: 10px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); align-items: flex-start; }
-        .btn-home { background: #34495e; color: white; border: none; padding: 0 15px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: bold; display: flex; align-items: center; justify-content: center; height: 50px; letter-spacing: -0.5px; }
-        
-        .game-info-col { flex-grow: 1; display: flex; flex-direction: column; gap: 5px; }
-        .row-upper { display: flex; justify-content: space-between; align-items: center; width: 100%; }
-        .row-lower { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 5px; }
-        .title-row { display: flex; align-items: center; gap: 8px; font-size: 1.1rem; }
-        
-        .score-box { font-weight: bold; font-size: 0.9rem; display: flex; gap: 8px; align-items: center; }
-        .player-info { display: flex; flex-direction: column; line-height: 1.1; }
-        .p-name { font-size: 0.75rem; opacity: 0.8; }
-        .p-score { font-size: 1rem; }
-        .p1 { color: #e74c3c; } .p2 { color: #2ecc71; } 
-        
-        .btn { background: #fff; border: 1px solid #ccc; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s; white-space: nowrap; }
-        .btn:active { transform: translateY(1px); background: #f0f0f0; }
-        .btn-hint { background: #f1c40f; border-color: #f39c12; color: #fff; }
-        .btn-ai-toggle { background: #ecf0f1; color: #7f8c8d; }
-        .btn-ai-toggle.active { background: #2ecc71; color: white; border-color: #27ae60; }
-        #ai-engine-select { min-width: 90px; }
-        .btn-resign { background: #e74c3c; color: white; border-color: #c0392b; }
-        
-        .phase-badge { font-size: 0.75rem; color: white; padding: 4px 8px; border-radius: 4px; background: #333; vertical-align: middle; }
-        
-        .ai-status-box { margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; text-align: left; }
-        #ai-status-text { font-size: 0.9rem; font-weight: bold; color: #e67e22; }
-        .manual-upload { font-size: 0.8rem; color: #999; cursor: pointer; text-decoration: underline; margin-left: 10px; }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #dfe4ea;
+            font-family: 'Pretendard', sans-serif;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
 
-        .fab-rotate-container { position: absolute; right: 20px; bottom: 30px; display: flex; flex-direction: column; align-items: center; pointer-events: auto; }
-        .fab-rotate { width: 70px; height: 70px; background: #fff; color: #333; border-radius: 50%; border: 2px solid #ddd; display: flex; justify-content: center; align-items: center; font-size: 2.2rem; cursor: pointer; box-shadow: 0 6px 15px rgba(0,0,0,0.2); transition: transform 0.1s; }
-        .fab-rotate:active { transform: scale(0.95); background: #f9f9f9; }
-        .key-hint { font-size: 0.7rem; color: #666; margin-top: 5px; font-weight: bold; text-shadow: 1px 1px 0 #fff; }
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            height: 100dvh;
+            z-index: 1;
+            touch-action: none;
+        }
 
-        .fab-rules { pointer-events: auto; position: absolute; left: 20px; bottom: 30px; width: 45px; height: 45px; background: #3498db; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-        .log-panel { pointer-events: auto; position: absolute; left: 20px; bottom: 85px; background: rgba(0,0,0,0.6); color: #fff; width: 250px; height: 140px; border-radius: 8px; padding: 10px; overflow-y: auto; overflow-x: hidden; font-family: monospace; font-size: 0.8rem; display: block; text-shadow: 1px 1px 2px black; line-height: 1.35; }
-        
-        #lobby-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); z-index: 200; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: auto; }
-        .lobby-box { text-align: center; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); width: 85%; max-width: 400px; }
-        .lobby-title { font-size: 2rem; font-weight: bold; margin-bottom: 20px; color: #2c3e50; }
-        .lobby-btn { width: 100%; padding: 15px; margin: 8px 0; font-size: 1.1rem; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; color: white; transition: transform 0.1s; }
-        .btn-single { background: #9b59b6; } .btn-create { background: #3498db; } .btn-join { background: #2ecc71; }
-        .lobby-input { width: 100%; padding: 12px; margin: 8px 0; font-size: 1.1rem; border: 2px solid #ddd; border-radius: 10px; box-sizing: border-box; text-align: center; }
-        .code-input { letter-spacing: 2px; text-transform: uppercase; }
-        
-        #ai-loader { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 15px 30px; border-radius: 30px; font-weight: bold; font-size: 1.2rem; z-index: 50; pointer-events: none; backdrop-filter: blur(5px); }
-        #my-player-badge { font-size: 0.8rem; font-weight: bold; padding: 4px 10px; border-radius: 15px; display: inline-block; color: white; }
-        
-        #win-rate-bar-container { position: absolute; top: 130px; right: 10px; width: 12px; height: 150px; background: #ecf0f1; border-radius: 6px; overflow: hidden; border: 1px solid #bdc3c7; z-index: 5; pointer-events: none; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        #win-rate-fill { width: 100%; height: 50%; background: linear-gradient(to top, #34495e, #e74c3c); transition: height 0.5s ease-out; position: absolute; bottom: 0; }
-        #win-rate-text { position: absolute; top: 110px; right: 30px; font-size: 0.8rem; font-weight: bold; color: #2c3e50; text-align: right; width: 120px; text-shadow: 1px 1px 0 rgba(255,255,255,0.8); display: none; }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            height: 100dvh;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
 
-        .modal-overlay { pointer-events: auto; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 300; }
-        .modal-content { background: white; width: 85%; max-width: 500px; max-height: 85%; border-radius: 12px; padding: 25px; overflow-y: auto; position: relative; text-align: center; }
-        .close-btn { position: absolute; top: 15px; right: 20px; font-size: 1.5rem; cursor: pointer; color: #888; }
-        h3 { margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        .rule-sec { margin-bottom: 15px; text-align: left; } .rule-head { font-weight: bold; color: #2c3e50; margin-bottom: 5px; } .rule-desc { font-size: 0.9rem; color: #555; line-height: 1.5; }
-        
-        .end-btn-group { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
-        .req-btn { width: 48%; padding: 12px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; color: white; }
-        .req-btn.yes { background: #2ecc71; } .req-btn.no { background: #e74c3c; }
+        .top-bar {
+            pointer-events: auto;
+            display: flex;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 15px;
+            margin: 10px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            align-items: flex-start;
+        }
+
+        .btn-home {
+            background: #34495e;
+            color: white;
+            border: none;
+            padding: 0 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 50px;
+            letter-spacing: -0.5px;
+        }
+
+        .game-info-col {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .row-upper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .row-lower {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin-top: 5px;
+        }
+
+        .title-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1.1rem;
+        }
+
+        .score-box {
+            font-weight: bold;
+            font-size: 0.9rem;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .player-info {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.1;
+        }
+
+        .p-name {
+            font-size: 0.75rem;
+            opacity: 0.8;
+        }
+
+        .p-score {
+            font-size: 1rem;
+        }
+
+        .p1 {
+            color: #e74c3c;
+        }
+
+        .p2 {
+            color: #2ecc71;
+        }
+
+        .btn {
+            background: #fff;
+            border: 1px solid #ccc;
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn:active {
+            transform: translateY(1px);
+            background: #f0f0f0;
+        }
+
+        .btn-hint {
+            background: #f1c40f;
+            border-color: #f39c12;
+            color: #fff;
+        }
+
+        .btn-ai-toggle {
+            background: #ecf0f1;
+            color: #7f8c8d;
+        }
+
+        .btn-ai-toggle.active {
+            background: #2ecc71;
+            color: white;
+            border-color: #27ae60;
+        }
+
+        #ai-engine-select {
+            min-width: 90px;
+        }
+
+        .btn-resign {
+            background: #e74c3c;
+            color: white;
+            border-color: #c0392b;
+        }
+
+        .phase-badge {
+            font-size: 0.75rem;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: #333;
+            vertical-align: middle;
+        }
+
+        .ai-status-box {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+            text-align: left;
+        }
+
+        #ai-status-text {
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: #e67e22;
+        }
+
+        .manual-upload {
+            font-size: 0.8rem;
+            color: #999;
+            cursor: pointer;
+            text-decoration: underline;
+            margin-left: 10px;
+        }
+
+        /* Skin Selector UI */
+        .skin-selector-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+            overflow-x: auto;
+            padding-bottom: 5px;
+        }
+
+        .skin-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 8px;
+            cursor: pointer;
+            background: white;
+            transition: all 0.2s;
+            min-width: 60px;
+            opacity: 0.5;
+        }
+
+        .skin-btn.unlocked {
+            opacity: 1;
+            border-color: #3498db;
+        }
+
+        .skin-btn.equipped {
+            background: #e8f4f8;
+            border-color: #2ecc71;
+            box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+        }
+
+        .skin-icon {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+
+        .skin-name {
+            font-size: 0.7rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .fab-rotate-container {
+            position: absolute;
+            right: 20px;
+            bottom: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        .fab-rotate {
+            width: 70px;
+            height: 70px;
+            background: #fff;
+            color: #333;
+            border-radius: 50%;
+            border: 2px solid #ddd;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2.2rem;
+            cursor: pointer;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+            transition: transform 0.1s;
+        }
+
+        .fab-rotate:active {
+            transform: scale(0.95);
+            background: #f9f9f9;
+        }
+
+        .key-hint {
+            font-size: 0.7rem;
+            color: #666;
+            margin-top: 5px;
+            font-weight: bold;
+            text-shadow: 1px 1px 0 #fff;
+        }
+
+        .fab-rules {
+            pointer-events: auto;
+            position: absolute;
+            left: 20px;
+            bottom: 30px;
+            width: 45px;
+            height: 45px;
+            background: #3498db;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .log-panel {
+            pointer-events: auto;
+            position: absolute;
+            left: 20px;
+            bottom: 85px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            width: 250px;
+            height: 140px;
+            border-radius: 8px;
+            padding: 10px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            font-family: monospace;
+            font-size: 0.8rem;
+            display: block;
+            text-shadow: 1px 1px 2px black;
+            line-height: 1.35;
+        }
+
+        #lobby-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 10, 20, 0.4);
+            backdrop-filter: blur(2px);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        .lobby-box {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(15px);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+            width: 85%;
+            max-width: 400px;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .lobby-title {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+
+        .lobby-btn {
+            width: 100%;
+            padding: 15px;
+            margin: 8px 0;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            color: white;
+            transition: transform 0.1s;
+        }
+
+        .btn-single {
+            background: #9b59b6;
+        }
+
+        .btn-create {
+            background: #3498db;
+        }
+
+        .btn-join {
+            background: #2ecc71;
+        }
+
+        .lobby-input {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            font-size: 1.1rem;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        .code-input {
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        #ai-loader {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            z-index: 50;
+            pointer-events: none;
+            backdrop-filter: blur(5px);
+        }
+
+        #my-player-badge {
+            font-size: 0.8rem;
+            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 15px;
+            display: inline-block;
+            color: white;
+        }
+
+        #win-rate-bar-container {
+            position: absolute;
+            top: 130px;
+            right: 10px;
+            width: 12px;
+            height: 150px;
+            background: #ecf0f1;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #bdc3c7;
+            z-index: 5;
+            pointer-events: none;
+            display: none;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        #win-rate-fill {
+            width: 100%;
+            height: 50%;
+            background: linear-gradient(to top, #34495e, #e74c3c);
+            transition: height 0.5s ease-out;
+            position: absolute;
+            bottom: 0;
+        }
+
+        #win-rate-text {
+            position: absolute;
+            top: 110px;
+            right: 30px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #2c3e50;
+            text-align: right;
+            width: 120px;
+            text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.8);
+            display: none;
+        }
+
+        .modal-overlay {
+            pointer-events: auto;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 300;
+        }
+
+        .modal-content {
+            background: white;
+            width: 85%;
+            max-width: 500px;
+            max-height: 85%;
+            border-radius: 12px;
+            padding: 25px;
+            overflow-y: auto;
+            position: relative;
+            text-align: center;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #888;
+        }
+
+        h3 {
+            margin-top: 0;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .rule-sec {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        .rule-head {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .rule-desc {
+            font-size: 0.9rem;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .end-btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .req-btn {
+            width: 48%;
+            padding: 12px;
+            font-weight: bold;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            color: white;
+        }
+
+        .req-btn.yes {
+            background: #2ecc71;
+        }
+
+        .req-btn.no {
+            background: #e74c3c;
+        }
+
+        /* Auth & Profile Styles */
+        .auth-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+            margin-top: 15px;
+        }
+
+        .auth-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+
+        .profile-box {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: left;
+            display: none;
+        }
+
+        .profile-name {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .profile-stats {
+            font-size: 0.9rem;
+            color: #7f8c8d;
+        }
+
+        .skin-section {
+            margin-top: 10px;
+            border-top: 1px dashed #ccc;
+            padding-top: 10px;
+        }
+
+        .skin-section-title {
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 5px;
+        }
+
+        .btn-logout {
+            background: #95a5a6;
+            font-size: 0.8rem;
+            padding: 4px 8px;
+            margin-top: 10px;
+            width: auto;
+        }
+
+        /* Admin Dashboard Styles */
+        #admin-modal .modal-content {
+            max-width: 600px;
+            text-align: left;
+        }
+
+        .admin-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 0.9rem;
+        }
+
+        .admin-table th,
+        .admin-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .admin-table th {
+            background-color: #f2f2f2;
+            color: #333;
+        }
+
+        .admin-action-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        /* Chat Styles */
+        .chat-panel {
+            pointer-events: auto;
+            position: absolute;
+            right: 20px;
+            bottom: 85px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            width: 300px;
+            height: 250px;
+            border-radius: 12px;
+            display: none;
+            flex-direction: column;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            z-index: 50;
+        }
+
+        .chat-header {
+            background: #34495e;
+            color: white;
+            padding: 8px 12px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .chat-messages {
+            flex-grow: 1;
+            padding: 10px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+
+        .chat-msg {
+            background: #ecf0f1;
+            padding: 8px 10px;
+            border-radius: 8px;
+            max-width: 85%;
+            align-self: flex-start;
+            word-wrap: break-word;
+        }
+
+        .chat-msg.mine {
+            background: #dff9fb;
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+
+        .chat-msg.system {
+            background: transparent;
+            color: #7f8c8d;
+            font-style: italic;
+            align-self: center;
+            text-align: center;
+        }
+
+        .chat-sender {
+            font-weight: bold;
+            font-size: 0.75rem;
+            color: #2980b9;
+            margin-bottom: 2px;
+        }
+
+        .chat-input-area {
+            display: flex;
+            border-top: 1px solid #ddd;
+        }
+
+        .chat-input {
+            flex-grow: 1;
+            border: none;
+            padding: 10px;
+            outline: none;
+            font-size: 0.9rem;
+        }
+
+        .chat-send-btn {
+            background: #2ecc71;
+            color: white;
+            border: none;
+            padding: 0 15px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        #btn-toggle-chat {
+            position: absolute;
+            right: 20px;
+            bottom: 30px;
+            border-radius: 8px;
+            height: 45px;
+            pointer-events: auto;
+            z-index: 49;
+            display: none;
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-    <script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } } </script>
+    <script
+        type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } } </script>
 </head>
+
 <body>
     <div id="lobby-overlay">
         <div class="lobby-box">
             <div class="lobby-title">🎲 블록 오목</div>
-            <div id="lobby-main">
-                <input type="text" id="nickname-input" class="lobby-input" placeholder="닉네임 (최대 6자)" maxlength="6" value="Player">
+
+            <!-- Profile Area (Hidden by default) -->
+            <div id="profile-area" class="profile-box" style="display: none;">
+                <div class="profile-name" id="display-profile-name">Guest</div>
+                <div class="profile-stats">승률: <span id="display-profile-winrate">0.0%</span> | 플레이: <span
+                        id="display-profile-plays">0</span></div>
+                <button class="lobby-btn btn-logout" onclick="logout()">로그아웃</button>
+            </div>
+
+            <!-- Auth Area (Hidden if logged in) -->
+            <div id="auth-area">
+                <button class="lobby-btn btn-single"
+                    style="width:100%; height:50px; font-size:1.1rem; background:white; color:#333; border:1px solid #ddd; display:flex; align-items:center; justify-content:center; gap:10px;"
+                    onclick="handleGoogleLogin()">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="G"
+                        width="24" height="24">
+                    Google 로그인
+                </button>
+                <div style="margin: 15px 0; border-top: 1px solid #eee;"></div>
+                <input type="text" id="guest-nickname" class="lobby-input" placeholder="게스트 닉네임 (입력 안하면 Guest)"
+                    maxlength="8">
+                <button class="lobby-btn" style="background: #7f8c8d; color: white; margin-top: 10px;"
+                    onclick="playAsGuest()">익명(게스트) 플레이</button>
+            </div>
+
+            <div id="lobby-main" style="display:none; margin-top:20px;">
                 <button class="lobby-btn btn-single" onclick="showSideSelection()">👤 AI와 대결 (싱글)</button>
                 <div style="margin: 15px 0; border-top: 1px solid #eee;"></div>
                 <div style="font-size:0.9rem; color:#666; margin-bottom:5px;">온라인 멀티플레이</div>
                 <button class="lobby-btn btn-create" onclick="createRoom()">방 만들기 (Host)</button>
                 <div style="margin: 5px 0; color: #888; font-size:0.8rem;">- 또는 -</div>
-                <input type="text" id="room-code-input" class="lobby-input code-input" placeholder="코드 6자리" maxlength="6">
+                <input type="text" id="room-code-input" class="lobby-input code-input" placeholder="접속 코드 작성"
+                    maxlength="8">
                 <button class="lobby-btn btn-join" onclick="joinRoom()">방 참가하기 (Join)</button>
 
                 <div class="ai-status-box">
                     <span id="ai-status-text">⏳ AI 엔진 대기 중...</span>
-                    <label for="ai-file-input" class="manual-upload">[수동 업로드]</label>
-                    <input type="file" id="ai-file-input" accept=".onnx" style="display:none;" onchange="loadCustomAI(this)">
+                    <!-- Hidden input for backward compatibility, not used in prod usually -->
                 </div>
             </div>
 
             <div id="lobby-side" style="display:none;">
                 <h3 style="margin-bottom:20px; color:#2c3e50;">진영을 선택하세요</h3>
-                <button class="lobby-btn" style="background:#333; color:white;" onclick="startSingleGame(1)">⚫ 흑돌 (선공)</button>
-                <button class="lobby-btn" style="background:#eee; color:#333; border:1px solid #ccc;" onclick="startSingleGame(2)">⚪ 백돌 (후공)</button>
+                <button class="lobby-btn" style="background:#333; color:white;" onclick="startSingleGame(1)">⚫ 흑돌
+                    (선공)</button>
+                <button class="lobby-btn" style="background:#eee; color:#333; border:1px solid #ccc;"
+                    onclick="startSingleGame(2)">⚪ 백돌 (후공)</button>
                 <button class="btn" onclick="location.reload()" style="margin-top:20px; width:100%;">취소</button>
             </div>
 
             <div id="lobby-wait" style="display:none;">
-                <div style="font-size:1.2rem; margin-bottom:15px;">방 코드: <span id="display-room-code" style="color:#e74c3c; font-weight:bold; font-size:2rem; letter-spacing:3px;"></span></div>
+                <div style="font-size:1.2rem; margin-bottom:15px;">방 코드: <span id="display-room-code"
+                        style="color:#e74c3c; font-weight:bold; font-size:2rem; letter-spacing:3px;"></span></div>
                 <div style="color:#555;">친구에게 이 코드를 알려주세요.</div>
                 <div style="margin-top:30px;">⏳ 접속 대기 중...</div>
                 <button class="btn" onclick="location.reload()" style="margin-top:20px; width:100%;">취소</button>
@@ -113,7 +821,9 @@
     <div id="game-canvas"></div>
     <div id="ai-loader">🤖 AI 생각중...</div>
 
-    <div id="win-rate-bar-container"><div id="win-rate-fill"></div></div>
+    <div id="win-rate-bar-container">
+        <div id="win-rate-fill"></div>
+    </div>
     <div id="win-rate-text">흑 승률: 50%</div>
 
     <div id="ui-layer" style="display:none;">
@@ -121,14 +831,16 @@
             <button class="btn-home" onclick="goHome()">홈화면</button>
             <div class="game-info-col">
                 <div class="row-upper">
-                    <div class="title-row"> <span style="font-weight:bold;">BLOCK OMOK</span> <span id="game-phase" class="phase-badge">착수</span> </div>
-                    <div class="btn-group"> 
-                        <button class="btn" id="btn-undo" onclick="window.requestUndo()">↩️ 무르기</button> 
-                        <button class="btn" id="btn-reset" onclick="window.resetGame()">🔄 초기화</button> 
-                        <button class="btn btn-resign" id="btn-resign" onclick="window.resign()" style="display:none;">🏳️ 기권</button>
+                    <div class="title-row"> <span style="font-weight:bold;">BLOCK OMOK</span> <span id="game-phase"
+                            class="phase-badge">착수</span> </div>
+                    <div class="btn-group">
+                        <button class="btn" id="btn-undo" onclick="window.requestUndo()">↩️ 무르기</button>
+                        <button class="btn" id="btn-reset" onclick="window.resetGame()">🔄 초기화</button>
+                        <button class="btn btn-resign" id="btn-resign" onclick="window.resign()"
+                            style="display:none;">🏳️ 기권</button>
                     </div>
                 </div>
-                <div class="score-box"> 
+                <div class="score-box">
                     <div class="player-info p1">
                         <span class="p-name" id="name-p1">흑</span>
                         <span class="p-score">블록: <span id="p1-cnt">4</span></span>
@@ -138,7 +850,8 @@
                         <span class="p-name" id="name-p2">백</span>
                         <span class="p-score">블록: <span id="p2-cnt">4</span></span>
                     </div>
-                    <span id="turn-indicator" style="font-size:0.8rem; margin-left:5px; color:#e74c3c; white-space:nowrap;">(흑 차례)</span> 
+                    <span id="turn-indicator"
+                        style="font-size:0.8rem; margin-left:5px; color:#e74c3c; white-space:nowrap;">(흑 차례)</span>
                 </div>
                 <div class="row-lower">
                     <div id="my-player-badge">싱글 모드</div>
@@ -148,7 +861,8 @@
                             <option value="rl">RL</option>
                             <option value="hybrid">Hybrid</option>
                         </select>
-                        <button id="btn-ai-toggle" class="btn btn-ai-toggle" onclick="window.toggleAIMode()">🤖 AI 대전</button>
+                        <button id="btn-ai-toggle" class="btn btn-ai-toggle" onclick="window.toggleAIMode()">🤖 AI
+                            대전</button>
                         <button class="btn btn-hint" onclick="window.askAI()">💡 힌트</button>
                     </div>
                 </div>
@@ -158,6 +872,19 @@
             <div>👆 클릭하여 착수/선택</div>
             <div>🚀 게임 시작!</div>
         </div>
+
+        <div class="chat-panel" id="chat-panel">
+            <div class="chat-header"><span>💬 전체 채팅</span> <span style="cursor:pointer;" onclick="toggleChat()">▼</span>
+            </div>
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" class="chat-input" placeholder="메시지 입력..."
+                    onkeypress="if(event.key==='Enter') sendChat()">
+                <button class="chat-send-btn" onclick="sendChat()">전송</button>
+            </div>
+        </div>
+        <button class="btn" id="btn-toggle-chat" onclick="toggleChat()">💬 채팅</button>
+
         <div class="fab-rotate-container">
             <div class="fab-rotate" id="btn-rotate">↻</div>
             <div class="key-hint">(R키)</div>
@@ -169,9 +896,19 @@
         <div class="modal-content" style="text-align:left;">
             <span class="close-btn" onclick="document.getElementById('rule-modal').style.display='none'">&times;</span>
             <h3>📜 게임 규칙 상세</h3>
-            <div class="rule-sec"><div class="rule-head">1. 승리 조건</div><div class="rule-desc">위에서 내려다보았을 때(Top View), 자신의 색깔 블록 5개가 연속(가로, 세로, 대각선)되면 승리합니다.</div></div>
-            <div class="rule-sec"><div class="rule-head">2. 착수 규칙</div><div class="rule-desc">- <b>접지/지지:</b> 바닥에 닿거나 아래에 블록이 있어야 합니다.<br>- <b>금지 구역(2턴 한정):</b> 백(1)은 좌상단 (1,4)(1,5)(2,5), 흑(2)는 우하단 (4,1)(5,1)(5,2)만 금지.</div></div>
-            <div class="rule-sec"><div class="rule-head">3. 이동 단계</div><div class="rule-desc">- 블록 4개를 다 쓰면 기존 블록을 옮겨야 합니다.<br>- 위에 다른 블록이 있으면 못 옮깁니다.</div></div>
+            <div class="rule-sec">
+                <div class="rule-head">1. 승리 조건</div>
+                <div class="rule-desc">위에서 내려다보았을 때(Top View), 자신의 색깔 블록 5개가 연속(가로, 세로, 대각선)되면 승리합니다.</div>
+            </div>
+            <div class="rule-sec">
+                <div class="rule-head">2. 착수 규칙</div>
+                <div class="rule-desc">- <b>접지/지지:</b> 바닥에 닿거나 아래에 블록이 있어야 합니다.<br>- <b>금지 구역(2턴 한정):</b> 백(1)은 좌상단
+                    (1,4)(1,5)(2,5), 흑(2)는 우하단 (4,1)(5,1)(5,2)만 금지.</div>
+            </div>
+            <div class="rule-sec">
+                <div class="rule-head">3. 이동 단계</div>
+                <div class="rule-desc">- 블록 4개를 다 쓰면 기존 블록을 옮겨야 합니다.<br>- 위에 다른 블록이 있으면 못 옮깁니다.</div>
+            </div>
         </div>
     </div>
 
@@ -194,12 +931,42 @@
         </div>
     </div>
 
+    <!-- Admin Dashboard Modal -->
+    <div id="admin-modal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn" onclick="document.getElementById('admin-modal').style.display='none'">&times;</span>
+            <h3 style="color: #e74c3c;">⚙️ 관리자 대시보드</h3>
+            <div style="margin-bottom: 10px;">
+                <input type="text" id="admin-search" class="lobby-input" placeholder="유저 ID 검색"
+                    style="display:inline-block; width:60%; padding:8px;">
+                <button class="admin-action-btn" onclick="adminLoadUser()">조회</button>
+            </div>
+
+            <div id="admin-user-details"
+                style="display:none; background:#f9f9f9; padding:10px; border-radius:8px; border:1px solid #ddd;">
+                <h4 style="margin-top:0;" id="admin-detail-id">User: ???</h4>
+                <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
+                    <label>승리:</label>
+                    <input type="number" id="admin-edit-wins" style="width:60px;">
+                    <label>플레이:</label>
+                    <input type="number" id="admin-edit-plays" style="width:60px;">
+                </div>
+                <button class="admin-action-btn" style="background:#2ecc71;" onclick="adminSaveUser()">저장/적용</button>
+            </div>
+        </div>
+    </div>
+
+
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, set, onValue, update, get, child, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         // 🌟 [핵심 변경] AI 연산을 담당할 Worker 생성 (화면 멈춤 방지)
         const aiWorker = new Worker('ai_worker.js');
@@ -237,7 +1004,7 @@
 
         function clearRoomListeners() {
             for (const unsub of roomUnsubs) {
-                try { unsub(); } catch (_) {}
+                try { unsub(); } catch (_) { }
             }
             roomUnsubs = [];
         }
@@ -251,9 +1018,9 @@
             const l = document.getElementById('ai-loader');
             if (l) l.style.display = 'none';
         }
-        
+
         // Worker로부터 메시지 수신 (비동기 처리)
-        aiWorker.onmessage = function(e) {
+        aiWorker.onmessage = function (e) {
             const msg = e.data || {};
             if (msg.type === 'INIT_OK') {
                 document.getElementById('ai-status-text').innerText = 'AI ready';
@@ -318,7 +1085,7 @@
         // 수동 파일 업로드 핸들러
         window.loadCustomAI = (input) => {
             const f = input.files[0];
-            if(!f) return;
+            if (!f) return;
             const url = URL.createObjectURL(f);
             aiWorker.postMessage({ type: 'INIT', url: url });
         };
@@ -336,17 +1103,161 @@
         };
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
+        const auth = getAuth(app);
 
         let myRoomId = null;
-        let myPlayerNum = 0; 
+        let myPlayerNum = 0;
         let isOnline = false;
         let isSpectator = false;
         let myNickname = "Player";
         let p1Name = "Black";
         let p2Name = "White";
+        let p1Skin = 0;
+        let p2Skin = 0;
+
+        // --- 3D Skin Definitions ---
+        const SKIN_CONFIGS = [
+            { id: 0, name: "기본", icon: "🪵", reqWins: 0, reqPlays: 0 },
+            { id: 1, name: "크리스탈", icon: "💎", reqWins: 0, reqPlays: 5 },
+            { id: 2, name: "네온", icon: "⚡", reqWins: 3, reqPlays: 0 },
+            { id: 3, name: "골드", icon: "🏆", reqWins: 10, reqPlays: 0 }
+        ];
+
+        function getMaterialForSkin(skinIndex, isP1, isHover) {
+            const baseColor = isP1 ? (isHover ? 0x555555 : 0x222222) : (isHover ? 0xffffff : 0xeeeeee);
+
+            switch (skinIndex) {
+                case 1: // Crystal (Glass)
+                    return new THREE.MeshPhysicalMaterial({
+                        color: isP1 ? 0x111111 : 0xffffff,
+                        metalness: 0.1, roughness: 0.1,
+                        transmission: 0.9, thickness: 1.5,
+                        transparent: true, opacity: isHover ? 0.6 : 1.0
+                    });
+                case 2: // Neon Cyberpunk
+                    const glowingMat = new THREE.MeshStandardMaterial({
+                        color: baseColor,
+                        emissive: isP1 ? 0xff0055 : 0x00ffff,
+                        emissiveIntensity: isHover ? 1.0 : 0.4,
+                        roughness: 0.5
+                    });
+                    return glowingMat;
+                case 3: // Gold (Metallic)
+                    return new THREE.MeshStandardMaterial({
+                        color: isP1 ? 0x8c7300 : 0xffd700, // Dark gold vs Bright gold
+                        metalness: 1.0, roughness: 0.2,
+                        emissive: isHover ? 0x332200 : 0x000000
+                    });
+                case 0: // Basic
+                default:
+                    return new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.3 });
+            }
+        }
+
+        // --- Account System Variables ---
+        let currentUser = null; // { id, nickname, wins, plays, unlocked_skins, equipped_skin }
+        let isGuest = false;
+
+        // --- Auth Functions ---
+        window.handleGoogleLogin = () => {
+            const provider = new GoogleAuthProvider();
+            signInWithPopup(auth, provider).catch((error) => {
+                alert("Google 로그인 실패: " + error.message);
+            });
+        };
+
+        let pendingGuestName = null;
+        window.playAsGuest = () => {
+            const inputName = document.getElementById('guest-nickname').value.trim();
+            pendingGuestName = inputName || null; // 빈 입력이면 null 처리
+            signInAnonymously(auth).catch((error) => {
+                alert("게스트 로그인 실패: " + error.message);
+                pendingGuestName = null;
+            });
+        };
+
+        // Listen for authentication state changes
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // User is signed in.
+                const uid = user.uid;
+                const isAnon = user.isAnonymous;
+
+                let name = user.displayName || "Player";
+                if (isAnon) {
+                    name = pendingGuestName ? pendingGuestName : ("Guest-" + uid.substring(0, 4));
+                    pendingGuestName = null; // 사용 후 초기화
+                }
+
+                // Retrieve or initialize user data in Realtime Database
+                const userRef = ref(db, 'users/' + uid);
+                get(userRef).then((snap) => {
+                    if (!snap.exists()) {
+                        const initData = { nickname: name, wins: 0, plays: 0, unlocked_skins: [0], equipped_skin: 0 };
+                        set(userRef, initData).then(() => {
+                            loginSuccess(uid, initData);
+                        });
+                    } else {
+                        loginSuccess(uid, snap.val());
+                    }
+                }).catch(e => { console.error("DB error:", e); });
+
+            } else {
+                // User is signed out.
+                currentUser = null;
+                isGuest = false;
+                document.getElementById('auth-area').style.display = 'block';
+                document.getElementById('profile-area').style.display = 'none';
+                document.getElementById('lobby-main').style.display = 'none';
+            }
+        });
+
+        function loginSuccess(id, data) {
+            currentUser = { id, ...data };
+            isGuest = auth.currentUser ? auth.currentUser.isAnonymous : false;
+            myNickname = data.nickname;
+
+            document.getElementById('auth-area').style.display = 'none';
+            document.getElementById('lobby-main').style.display = 'block';
+
+            document.getElementById('display-profile-name').innerText = data.nickname;
+
+            const initialWinRate = data.plays > 0 ? ((data.wins / data.plays) * 100).toFixed(1) : "0.0";
+            document.getElementById('display-profile-winrate').innerText = initialWinRate + '%';
+            document.getElementById('display-profile-plays').innerText = data.plays;
+
+            document.getElementById('profile-area').style.display = 'block';
+            document.getElementById('skin-section').style.display = 'block';
+            renderSkinSelector(data);
+
+            // Also listen for real-time stat updates
+            onValue(ref(db, 'users/' + id), (snap) => {
+                const updated = snap.val();
+                if (updated && currentUser) {
+                    currentUser.wins = updated.wins;
+                    currentUser.plays = updated.plays;
+                    currentUser.equipped_skin = updated.equipped_skin || 0;
+
+                    const rWinRate = updated.plays > 0 ? ((updated.wins / updated.plays) * 100).toFixed(1) : "0.0";
+                    document.getElementById('display-profile-winrate').innerText = rWinRate + '%';
+                    document.getElementById('display-profile-plays').innerText = updated.plays;
+                    renderSkinSelector(currentUser);
+                }
+            });
+        }
+
+        window.logout = () => {
+            if (confirm("로그아웃 하시겠습니까?")) {
+                signOut(auth).then(() => {
+                    location.hash = "";
+                }).catch((error) => {
+                    alert("로그아웃 오류: " + error.message);
+                });
+            }
+        };
 
         window.goHome = () => {
-            if(confirm("게임에서 나가시겠습니까?")) {
+            if (confirm("게임에서 나가시겠습니까?")) {
                 clearRoomListeners();
                 beginNewSession();
                 location.hash = "";
@@ -354,17 +1265,18 @@
         };
         window.addEventListener('popstate', () => {
             const hash = location.hash;
-            if(!hash) {
+            if (!hash) {
+                lobbyGroup.visible = true;
                 clearRoomListeners();
                 beginNewSession();
-                document.getElementById('game-canvas').style.display='none';
-                document.getElementById('ui-layer').style.display='none';
-                document.getElementById('lobby-overlay').style.display='flex';
-                document.getElementById('lobby-main').style.display='block';
-                document.getElementById('lobby-side').style.display='none';
-                document.getElementById('lobby-wait').style.display='none';
-                document.getElementById('win-rate-bar-container').style.display='none';
-                document.getElementById('win-rate-text').style.display='none';
+                document.getElementById('game-canvas').style.display = 'none';
+                document.getElementById('ui-layer').style.display = 'none';
+                document.getElementById('lobby-overlay').style.display = 'flex';
+                document.getElementById('lobby-main').style.display = 'block';
+                document.getElementById('lobby-side').style.display = 'none';
+                document.getElementById('lobby-wait').style.display = 'none';
+                document.getElementById('win-rate-bar-container').style.display = 'none';
+                document.getElementById('win-rate-text').style.display = 'none';
                 isOnline = false;
                 isSpectator = false;
                 myRoomId = null;
@@ -374,17 +1286,17 @@
         });
 
         const SHAPES = [
-            [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:1,z:0}], [{x:0,y:0,z:0}, {x:1,y:0,z:0}, {x:0,y:-1,z:0}],
-            [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:-1,z:0}], [{x:0,y:0,z:0}, {x:-1,y:0,z:0}, {x:0,y:1,z:0}],
-            [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:1,y:0,z:1}], [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:-1,y:0,z:1}],
-            [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:0,y:1,z:1}], [{x:0,y:0,z:0}, {x:0,y:0,z:1}, {x:0,y:-1,z:1}]
+            [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }], [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: -1, z: 0 }],
+            [{ x: 0, y: 0, z: 0 }, { x: -1, y: 0, z: 0 }, { x: 0, y: -1, z: 0 }], [{ x: 0, y: 0, z: 0 }, { x: -1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }],
+            [{ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, { x: 1, y: 0, z: 1 }], [{ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, { x: -1, y: 0, z: 1 }],
+            [{ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, { x: 0, y: 1, z: 1 }], [{ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, { x: 0, y: -1, z: 1 }]
         ];
-        function getCellsFromBase(bx, by, shapeIdx) { const shape = SHAPES[shapeIdx]; return shape.map(d => ({x: bx + d.x, y: by + d.y, z: d.z})); }
+        function getCellsFromBase(bx, by, shapeIdx) { const shape = SHAPES[shapeIdx]; return shape.map(d => ({ x: bx + d.x, y: by + d.y, z: d.z })); }
 
         class GameLogic {
             constructor() { this.reset(); }
             reset() {
-                this.board = Array.from({length: 5}, () => Array.from({length: 5}, () => Array(5).fill(0)));
+                this.board = Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => Array(5).fill(0)));
                 this.blocks = []; this.history = []; this.turnCount = 0; this.currentPlayer = 1;
                 this.blocksLeft = { 1: 4, 2: 4 }; this.phase = 'PLACEMENT'; this.winner = 0;
                 this.initFixedBlocks(); this.aiMode = false; this.selectedBlock = null; this.selectedBlockOriginalCells = null;
@@ -393,11 +1305,11 @@
             serialize() { return { board: this.board, blocks: this.blocks, turnCount: this.turnCount, currentPlayer: this.currentPlayer, blocksLeft: this.blocksLeft, phase: this.phase, winner: this.winner }; }
             deserialize(data) { Object.assign(this, data); }
             initFixedBlocks() {
-                this.blocks = []; this.board = Array.from({length: 5}, () => Array.from({length: 5}, () => Array(5).fill(0)));
-                this.addBlock(1, [{x:1, y:3, z:0}, {x:2, y:3, z:0}, {x:1, y:2, z:0}], 0, false);
-                this.addBlock(2, [{x:2, y:1, z:0}, {x:3, y:1, z:0}, {x:3, y:2, z:0}], 0, false);
+                this.blocks = []; this.board = Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => Array(5).fill(0)));
+                this.addBlock(1, [{ x: 1, y: 3, z: 0 }, { x: 2, y: 3, z: 0 }, { x: 1, y: 2, z: 0 }], 0, false);
+                this.addBlock(2, [{ x: 2, y: 1, z: 0 }, { x: 3, y: 1, z: 0 }, { x: 3, y: 2, z: 0 }], 0, false);
             }
-            addBlock(player, cells, shapeIdx, isFixed=false) {
+            addBlock(player, cells, shapeIdx, isFixed = false) {
                 const blockId = Date.now() + Math.random(); this.blocks.push({ id: blockId, player, cells, shapeIdx, isFixed });
                 cells.forEach(c => this.board[c.z][c.y][c.x] = player);
             }
@@ -408,71 +1320,70 @@
             canPick(block) {
                 for (let c of block.cells) {
                     if (c.z >= 4) continue;
-                    if (this.board[c.z+1][c.y][c.x] !== 0) { const isSelf = block.cells.some(sc => sc.x===c.x && sc.y===c.y && sc.z===c.z+1); if (!isSelf) return false; }
+                    if (this.board[c.z + 1][c.y][c.x] !== 0) { const isSelf = block.cells.some(sc => sc.x === c.x && sc.y === c.y && sc.z === c.z + 1); if (!isSelf) return false; }
                 } return true;
             }
             pickBlock(x, y, z) {
-                const block = this.blocks.find(b => b.player === this.currentPlayer && b.cells.some(c => c.x===x && c.y===y && c.z===z));
+                const block = this.blocks.find(b => b.player === this.currentPlayer && b.cells.some(c => c.x === x && c.y === y && c.z === z));
                 if (!block) return { ok: false, msg: "내 블록 아님" };
                 if (!this.canPick(block)) return { ok: false, msg: "불가: 위에 블록 있음" };
                 this.saveState(); this.selectedBlockOriginalCells = JSON.parse(JSON.stringify(block.cells)); this.removeBlock(block.id); this.selectedBlock = block; return { ok: true, block: block };
             }
-            checkValidity(player, cells, isMovement=false, originalCells=null) {
+            checkValidity(player, cells, isMovement = false, originalCells = null) {
                 if (this.winner !== 0) return { ok: false, msg: "게임 종료됨" };
                 const origin = originalCells || (isMovement && this.selectedBlockOriginalCells ? this.selectedBlockOriginalCells : null);
                 if (isMovement && origin) {
-                    const cSet = new Set(cells.map(c=>`${c.x},${c.y},${c.z}`)); const oSet = new Set(origin.map(c=>`${c.x},${c.y},${c.z}`)); 
-                    if (cSet.size === oSet.size) { let same = true; for(let k of cSet) if(!oSet.has(k)) { same=false; break; } if(same) return { ok:false, msg:"제자리 불가" }; }
+                    const cSet = new Set(cells.map(c => `${c.x},${c.y},${c.z}`)); const oSet = new Set(origin.map(c => `${c.x},${c.y},${c.z}`));
+                    if (cSet.size === oSet.size) { let same = true; for (let k of cSet) if (!oSet.has(k)) { same = false; break; } if (same) return { ok: false, msg: "제자리 불가" }; }
                 }
-                for(let c of cells) { if(c.x<0||c.x>4||c.y<0||c.y>4||c.z<0||c.z>4) return {ok:false, msg:"범위 초과"}; if(this.board[c.z][c.y][c.x]!==0) return {ok:false, msg:"이미 있음"}; }
+                for (let c of cells) { if (c.x < 0 || c.x > 4 || c.y < 0 || c.y > 4 || c.z < 0 || c.z > 4) return { ok: false, msg: "범위 초과" }; if (this.board[c.z][c.y][c.x] !== 0) return { ok: false, msg: "이미 있음" }; }
                 if (!isMovement && this.turnCount < 2) {
-                    const restricted = (player === 1) ? ["0,3","0,4","1,4"] : ["3,0","4,0","4,1"];
-                    if (cells.some(c => c.z === 0 && restricted.includes(`${c.x},${c.y}`))) return {ok:false, msg:"금지 구역"};
+                    const restricted = (player === 1) ? ["0,3", "0,4", "1,4"] : ["3,0", "4,0", "4,1"];
+                    if (cells.some(c => c.z === 0 && restricted.includes(`${c.x},${c.y}`))) return { ok: false, msg: "금지 구역" };
                 }
-                if ([1,3].indexOf(cells.filter(c=>c.z===0).length) === -1) return {ok:false, msg:"접지 위반"};
-                for(let c of cells) { if(c.z>0) { const hasSup = this.board[c.z-1][c.y][c.x]!==0; const isSelf = cells.some(sc=>sc.x===c.x && sc.y===c.y && sc.z===c.z-1); if(!hasSup && !isSelf) return {ok:false, msg:"지지대 필요"}; } }
-                return {ok:true};
+                if ([1, 3].indexOf(cells.filter(c => c.z === 0).length) === -1) return { ok: false, msg: "접지 위반" };
+                for (let c of cells) { if (c.z > 0) { const hasSup = this.board[c.z - 1][c.y][c.x] !== 0; const isSelf = cells.some(sc => sc.x === c.x && sc.y === c.y && sc.z === c.z - 1); if (!hasSup && !isSelf) return { ok: false, msg: "지지대 필요" }; } }
+                return { ok: true };
             }
             confirmMove(cells, shapeIdx) {
-                if (this.phase === 'PLACEMENT') { this.saveState(); this.addBlock(this.currentPlayer, cells, shapeIdx); this.blocksLeft[this.currentPlayer]--; } 
+                if (this.phase === 'PLACEMENT') { this.saveState(); this.addBlock(this.currentPlayer, cells, shapeIdx); this.blocksLeft[this.currentPlayer]--; }
                 else { this.addBlock(this.currentPlayer, cells, shapeIdx); this.selectedBlock = null; this.selectedBlockOriginalCells = null; }
                 this.winner = this.checkWin();
-                if (this.winner === 0) { 
-                    this.turnCount++; this.currentPlayer = this.currentPlayer===1 ? 2:1; 
-                    if (this.blocksLeft[1] === 0 && this.blocksLeft[2] === 0) this.phase = 'MOVEMENT'; else if (this.blocksLeft[this.currentPlayer] === 0 && this.phase === 'PLACEMENT') this.phase = 'MOVEMENT'; 
-                    
+                if (this.winner === 0) {
+                    this.turnCount++; this.currentPlayer = this.currentPlayer === 1 ? 2 : 1;
+                    if (this.blocksLeft[1] === 0 && this.blocksLeft[2] === 0) this.phase = 'MOVEMENT'; else if (this.blocksLeft[this.currentPlayer] === 0 && this.phase === 'PLACEMENT') this.phase = 'MOVEMENT';
+
                     // 🌟 [변경] AI 실행 (Worker에게 요청)
-                    if(!isOnline && this.aiMode && this.currentPlayer !== myPlayerNum) runAI(); 
+                    if (!isOnline && this.aiMode && this.currentPlayer !== myPlayerNum) runAI();
                 }
                 sendMove(); updateWinRateUI();
                 return this.winner;
             }
             checkWin() {
-                const topMap = Array.from({length: 5}, () => Array(5).fill(0));
-                for(let y=0; y<5; y++) { for(let x=0; x<5; x++) { for(let z=4; z>=0; z--) { if(this.board[z][y][x]!==0) { topMap[y][x]=this.board[z][y][x]; break; } } } }
-                const dirs = [{dx:1, dy:0}, {dx:0, dy:1}, {dx:1, dy:1}, {dx:1, dy:-1}];
-                for(let y=0; y<5; y++) {
-                    for(let x=0; x<5; x++) {
-                        let c = topMap[y][x]; if(c===0) continue; 
-                        for(let d of dirs) { 
-                            let cnt=1; 
-                            for(let k=1; k<5; k++) { let nx=x+d.dx*k, ny=y+d.dy*k; if(nx>=0&&nx<5&&ny>=0&&ny<5&&topMap[ny][nx]===c) cnt++; else break; } 
-                            if(cnt===5) return c; 
-                        } 
+                const topMap = Array.from({ length: 5 }, () => Array(5).fill(0));
+                for (let y = 0; y < 5; y++) { for (let x = 0; x < 5; x++) { for (let z = 4; z >= 0; z--) { if (this.board[z][y][x] !== 0) { topMap[y][x] = this.board[z][y][x]; break; } } } }
+                const dirs = [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 1, dy: -1 }];
+                for (let y = 0; y < 5; y++) {
+                    for (let x = 0; x < 5; x++) {
+                        let c = topMap[y][x]; if (c === 0) continue;
+                        for (let d of dirs) {
+                            let cnt = 1;
+                            for (let k = 1; k < 5; k++) { let nx = x + d.dx * k, ny = y + d.dy * k; if (nx >= 0 && nx < 5 && ny >= 0 && ny < 5 && topMap[ny][nx] === c) cnt++; else break; }
+                            if (cnt === 5) return c;
+                        }
                     }
-                } 
+                }
                 return 0;
             }
-            saveState() { const s = { board: JSON.parse(JSON.stringify(this.board)), blocks: JSON.parse(JSON.stringify(this.blocks)), turnCount: this.turnCount, currentPlayer: this.currentPlayer, blocksLeft: {...this.blocksLeft}, phase: this.phase, winner: this.winner }; this.history.push(s); }
-            undo() { if(this.history.length===0) return false; const s = this.history.pop(); Object.assign(this, s); this.selectedBlock=null; this.selectedBlockOriginalCells=null; return true; }
+            saveState() { const s = { board: JSON.parse(JSON.stringify(this.board)), blocks: JSON.parse(JSON.stringify(this.blocks)), turnCount: this.turnCount, currentPlayer: this.currentPlayer, blocksLeft: { ...this.blocksLeft }, phase: this.phase, winner: this.winner }; this.history.push(s); }
+            undo() { if (this.history.length === 0) return false; const s = this.history.pop(); Object.assign(this, s); this.selectedBlock = null; this.selectedBlockOriginalCells = null; return true; }
         }
 
-        const logic = new GameLogic(); 
-        const logEl = document.getElementById('log-console'); 
+        const logic = new GameLogic();
         const aiLoader = document.getElementById('ai-loader');
 
         function clearHintGhost() {
-            while(hintGroup.children.length > 0) hintGroup.remove(hintGroup.children[0]);
+            while (hintGroup.children.length > 0) hintGroup.remove(hintGroup.children[0]);
         }
 
         function clearLog() {
@@ -535,70 +1446,137 @@
             });
         }
 
+
         function log(msg) { const div = document.createElement('div'); div.innerText = `> ${msg}`; logEl.appendChild(div); logEl.scrollTop = logEl.scrollHeight; }
 
-        const scene = new THREE.Scene(); scene.background = new THREE.Color(0xdfe4ea);
-        const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100); camera.position.set(0, 14, 12); camera.lookAt(0,0,0);
-        const renderer = new THREE.WebGLRenderer({antialias:true}); renderer.setSize(window.innerWidth, window.innerHeight); renderer.shadowMap.enabled = true; document.getElementById('game-canvas').appendChild(renderer.domElement);
-        scene.add(new THREE.AmbientLight(0xffffff, 0.6)); const dirLight = new THREE.DirectionalLight(0xffffff, 0.7); dirLight.position.set(5,15,5); dirLight.castShadow=true; scene.add(dirLight);
-        const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping=true; controls.maxPolarAngle=Math.PI/2;
+        const logEl = document.getElementById('log-console');
+        const scene = new THREE.Scene(); scene.background = new THREE.Color(0x1a1a2e);
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100); camera.position.set(0, 14, 12); camera.lookAt(0, 0, 0);
+        const canvasEl = document.getElementById('game-canvas');
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        canvasEl.appendChild(renderer.domElement);
+
+        // --- Post-Processing (Bloom) ---
+        const composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0.2;
+        bloomPass.strength = 1.2;
+        bloomPass.radius = 0.5;
+        composer.addPass(bloomPass);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6)); const dirLight = new THREE.DirectionalLight(0xffffff, 0.7); dirLight.position.set(5, 15, 5); dirLight.castShadow = true; scene.add(dirLight);
+        const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.maxPolarAngle = Math.PI / 2;
         const boardGroup = new THREE.Group(); scene.add(boardGroup); const ghostGroup = new THREE.Group(); scene.add(ghostGroup); const hintGroup = new THREE.Group(); scene.add(hintGroup); const thinkingGroup = new THREE.Group(); scene.add(thinkingGroup);
-        function clearThinkingIndicators() { while(thinkingGroup.children.length > 0) thinkingGroup.remove(thinkingGroup.children[0]); }
-        const hitPlane = new THREE.Mesh(new THREE.PlaneGeometry(6,6), new THREE.MeshBasicMaterial({ visible:false, side:THREE.DoubleSide })); hitPlane.rotation.x=-Math.PI/2; hitPlane.position.y=0.5; scene.add(hitPlane);
-        scene.add(new THREE.GridHelper(5,5, 0xbdc3c7, 0xecf0f1)); const basePlate = new THREE.Mesh(new THREE.BoxGeometry(5,0.1,5), new THREE.MeshStandardMaterial({color:0xdeb887})); basePlate.position.y=-0.05; basePlate.receiveShadow=true; scene.add(basePlate);
-        let currentShapeIdx=0, hoverX=-1, hoverY=-1, hoveredBlockId=null;
+
+        // --- Lobby 3D Background ---
+        const lobbyGroup = new THREE.Group(); scene.add(lobbyGroup);
+
+        const lobbyBlocks = [];
+        const lobbyMats = [
+            getMaterialForSkin(0, true, false), getMaterialForSkin(1, false, false),
+            getMaterialForSkin(2, true, false), getMaterialForSkin(3, false, false)
+        ];
+        for (let i = 0; i < 30; i++) {
+            const wrapper = new THREE.Group();
+            const blockGroup = new THREE.Group();
+
+            const shapeIdx = Math.floor(Math.random() * SHAPES.length);
+            const shape = SHAPES[shapeIdx];
+            const mat = lobbyMats[Math.floor(Math.random() * lobbyMats.length)];
+
+            const size = Math.random() * 0.6 + 0.6; // Slightly smaller since there are 3 blocks
+            const lg = new RoundedBoxGeometry(size, size, size, 4, 0.15);
+
+            shape.forEach(cell => {
+                const subMesh = new THREE.Mesh(lg, mat);
+                subMesh.position.set(cell.x * size, cell.y * size, cell.z * size);
+                blockGroup.add(subMesh);
+            });
+
+            // Center the group
+            const box = new THREE.Box3().setFromObject(blockGroup);
+            const center = box.getCenter(new THREE.Vector3());
+            blockGroup.position.sub(center);
+
+            wrapper.add(blockGroup);
+
+            wrapper.position.set((Math.random() - 0.5) * 30, Math.random() * 40 - 5, (Math.random() - 0.5) * 20 - 5);
+            wrapper.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+
+            const speed = Math.random() * 0.05 + 0.02;
+            const rotSpeed = { x: (Math.random() - 0.5) * 0.04, y: (Math.random() - 0.5) * 0.04, z: (Math.random() - 0.5) * 0.04 };
+
+            lobbyGroup.add(wrapper);
+            lobbyBlocks.push({ mesh: wrapper, speed, rotSpeed });
+        }
+
+        function clearThinkingIndicators() { while (thinkingGroup.children.length > 0) thinkingGroup.remove(thinkingGroup.children[0]); }
+        const hitPlane = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide })); hitPlane.rotation.x = -Math.PI / 2; hitPlane.position.y = 0.5; scene.add(hitPlane);
+        scene.add(new THREE.GridHelper(5, 5, 0xbdc3c7, 0xecf0f1)); const basePlate = new THREE.Mesh(new THREE.BoxGeometry(5, 0.1, 5), new THREE.MeshStandardMaterial({ color: 0xdeb887 })); basePlate.position.y = -0.05; basePlate.receiveShadow = true; scene.add(basePlate);
+        let currentShapeIdx = 0, hoverX = -1, hoverY = -1, hoveredBlockId = null;
 
         function updateUI() {
             document.getElementById('p1-cnt').innerText = logic.blocksLeft[1]; document.getElementById('p2-cnt').innerText = logic.blocksLeft[2];
             document.getElementById('name-p1').innerText = p1Name; document.getElementById('name-p2').innerText = p2Name;
-            document.getElementById('turn-indicator').innerText = logic.currentPlayer===1?`(${p1Name})`:`(${p2Name})`;
-            document.getElementById('turn-indicator').style.color = logic.currentPlayer===1?"#e74c3c":"#2ecc71";
-            document.getElementById('game-phase').innerText = logic.phase==='MOVEMENT'?"이동":"착수";
-            document.getElementById('game-phase').style.background = logic.phase==='MOVEMENT'?"#e67e22":"#333";
+            document.getElementById('turn-indicator').innerText = logic.currentPlayer === 1 ? `(${p1Name})` : `(${p2Name})`;
+            document.getElementById('turn-indicator').style.color = logic.currentPlayer === 1 ? "#e74c3c" : "#2ecc71";
+            document.getElementById('game-phase').innerText = logic.phase === 'MOVEMENT' ? "이동" : "착수";
+            document.getElementById('game-phase').style.background = logic.phase === 'MOVEMENT' ? "#e67e22" : "#333";
             const btn = document.getElementById('btn-ai-toggle'); btn.innerText = logic.aiMode ? "🤖 AI: ON" : "🤖 AI: OFF"; logic.aiMode ? btn.classList.add('active') : btn.classList.remove('active');
-            
-            const btnUndo = document.getElementById('btn-undo'); 
+
+            const btnUndo = document.getElementById('btn-undo');
             if (isOnline) { btnUndo.innerText = "↩️ 요청"; btnUndo.onclick = window.requestUndo; } else { btnUndo.innerText = "↩️ 무르기"; btnUndo.onclick = window.undo; }
 
             const btnResign = document.getElementById('btn-resign');
-            if(isOnline && !isSpectator) btnResign.style.display = 'inline-block';
+            if (isOnline && !isSpectator) btnResign.style.display = 'inline-block';
             else btnResign.style.display = 'none';
 
             document.getElementById('btn-reset').style.display = isOnline ? 'none' : 'inline-block';
         }
-        
+
         function updateWinRateUI() {
-            if (logic.winner !== 0) { 
-                document.getElementById('win-rate-text').innerText = logic.winner === 1 ? "흑 승리!" : "백 승리!"; 
-                document.getElementById('win-rate-fill').style.height = logic.winner === 1 ? "100%" : "0%"; 
+            if (logic.winner !== 0) {
+                document.getElementById('win-rate-text').innerText = logic.winner === 1 ? "흑 승리!" : "백 승리!";
+                document.getElementById('win-rate-fill').style.height = logic.winner === 1 ? "100%" : "0%";
             }
             // Worker에게 승률 계산 요청도 가능하지만 복잡하므로 일단 생략
         }
 
         function renderBoard() {
-            for(let i=boardGroup.children.length-1; i>=0; i--) boardGroup.remove(boardGroup.children[i]);
-            const geo = new RoundedBoxGeometry(0.98,0.98,0.98, 4, 0.1);
+            for (let i = boardGroup.children.length - 1; i >= 0; i--) boardGroup.remove(boardGroup.children[i]);
+            const geo = new RoundedBoxGeometry(0.98, 0.98, 0.98, 4, 0.1);
             logic.blocks.forEach(b => {
-                const isHov = b.id===hoveredBlockId; const col = b.player===1 ? (isHov?0x555555:0x333333) : (isHov?0xffffff:0xeeeeee); const mat = new THREE.MeshStandardMaterial({color:col, roughness:0.3}); const grp = new THREE.Group(); grp.userData={id:b.id, isBlock:true};
-                b.cells.forEach(c=>{ const m = new THREE.Mesh(geo, mat); m.position.set(c.x-2, c.z+0.5, c.y-2); m.castShadow=true; m.receiveShadow=true; m.userData={id:b.id, parentGroup:grp}; grp.add(m); });
-                for(let i=0; i<b.cells.length; i++) for(let j=i+1; j<b.cells.length; j++) { const c1=b.cells[i], c2=b.cells[j]; if(Math.abs(c1.x-c2.x)+Math.abs(c1.y-c2.y)+Math.abs(c1.z-c2.z)===1) { let bg; if(Math.abs(c1.x-c2.x)===1) bg=new THREE.BoxGeometry(1,0.8,0.8); else if(Math.abs(c1.y-c2.y)===1) bg=new THREE.BoxGeometry(0.8,0.8,1); else bg=new THREE.BoxGeometry(0.8,1,0.8); const br=new THREE.Mesh(bg, mat); br.position.set((c1.x+c2.x)/2-2, (c1.z+c2.z)/2+0.5, (c1.y+c2.y)/2-2); grp.add(br); } } boardGroup.add(grp);
+                const isHov = b.id === hoveredBlockId;
+                const isP1 = b.player === 1;
+                const skinIdx = isP1 ? p1Skin : p2Skin;
+                const mat = getMaterialForSkin(skinIdx, isP1, isHov);
+
+                const grp = new THREE.Group(); grp.userData = { id: b.id, isBlock: true };
+                b.cells.forEach(c => { const m = new THREE.Mesh(geo, mat); m.position.set(c.x - 2, c.z + 0.5, c.y - 2); m.castShadow = true; m.receiveShadow = true; m.userData = { id: b.id, parentGroup: grp }; grp.add(m); });
+                for (let i = 0; i < b.cells.length; i++) for (let j = i + 1; j < b.cells.length; j++) { const c1 = b.cells[i], c2 = b.cells[j]; if (Math.abs(c1.x - c2.x) + Math.abs(c1.y - c2.y) + Math.abs(c1.z - c2.z) === 1) { let bg; if (Math.abs(c1.x - c2.x) === 1) bg = new THREE.BoxGeometry(1, 0.8, 0.8); else if (Math.abs(c1.y - c2.y) === 1) bg = new THREE.BoxGeometry(0.8, 0.8, 1); else bg = new THREE.BoxGeometry(0.8, 1, 0.8); const br = new THREE.Mesh(bg, mat); br.position.set((c1.x + c2.x) / 2 - 2, (c1.z + c2.z) / 2 + 0.5, (c1.y + c2.y) / 2 - 2); grp.add(br); } } boardGroup.add(grp);
             });
         }
         function updateGhost() {
-            while(ghostGroup.children.length>0) ghostGroup.remove(ghostGroup.children[0]);
-            if(logic.winner!==0 || isSpectator || (isOnline && logic.currentPlayer!==myPlayerNum) || (logic.phase==='MOVEMENT' && !logic.selectedBlock) || hoverX===-1) return;
-            const sh = SHAPES[currentShapeIdx%8]; const cells = sh.map(c=>({x:hoverX+c.x, y:hoverY+c.y, z:c.z})); const chk = logic.checkValidity(logic.currentPlayer, cells, logic.phase==='MOVEMENT'); drawGhost(cells, chk.ok?0x2ecc71:0xe74c3c, ghostGroup, 0.6);
+            while (ghostGroup.children.length > 0) ghostGroup.remove(ghostGroup.children[0]);
+            if (logic.winner !== 0 || isSpectator || (isOnline && logic.currentPlayer !== myPlayerNum) || (logic.phase === 'MOVEMENT' && !logic.selectedBlock) || hoverX === -1) return;
+            const sh = SHAPES[currentShapeIdx % 8]; const cells = sh.map(c => ({ x: hoverX + c.x, y: hoverY + c.y, z: c.z })); const chk = logic.checkValidity(logic.currentPlayer, cells, logic.phase === 'MOVEMENT'); drawGhost(cells, chk.ok ? 0x2ecc71 : 0xe74c3c, ghostGroup, 0.6);
         }
-        function drawGhost(cells, col, grp, op) { const mat = new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:op}); const geo = new RoundedBoxGeometry(0.96,0.96,0.96, 4, 0.1); cells.forEach(c=>{ const m = new THREE.Mesh(geo, mat); m.position.set(c.x-2, c.z+0.52, c.y-2); grp.add(m); }); }
+        function drawGhost(cells, col, grp, op) { const mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op }); const geo = new RoundedBoxGeometry(0.96, 0.96, 0.96, 4, 0.1); cells.forEach(c => { const m = new THREE.Mesh(geo, mat); m.position.set(c.x - 2, c.z + 0.52, c.y - 2); grp.add(m); }); }
 
-        window.showSideSelection = () => { myNickname = document.getElementById('nickname-input').value || "Player"; p1Name = myNickname; p2Name = "AI Robot"; document.getElementById('lobby-main').style.display='none'; document.getElementById('lobby-side').style.display='block'; };
+        window.showSideSelection = () => { myNickname = document.getElementById('nickname-input').value || "Player"; p1Name = myNickname; p2Name = "AI Robot"; document.getElementById('lobby-main').style.display = 'none'; document.getElementById('lobby-side').style.display = 'block'; };
         window.startSingleGame = (playerNum) => {
             clearRoomListeners();
             isOnline = false;
             isSpectator = false;
             myRoomId = null;
             myPlayerNum = playerNum;
-            if(myPlayerNum === 2) { p1Name = 'AI Robot'; p2Name = myNickname; }
+            if (myPlayerNum === 2) { p1Name = 'AI Robot'; p2Name = myNickname; }
             else { p1Name = myNickname; p2Name = 'AI Robot'; }
             enterGameMode("single");
             const badge = document.getElementById('my-player-badge'); badge.innerText = 'single mode'; badge.style.background = "#333";
@@ -608,7 +1586,7 @@
             logic.aiMode = true;
             updateUI();
             updateWinRateUI();
-            if(myPlayerNum === 2) { setTimeout(() => runAI('play'), 500); }
+            if (myPlayerNum === 2) { setTimeout(() => runAI('play'), 500); }
         };
 
 
@@ -616,29 +1594,50 @@
             clearRoomListeners();
             isSpectator = false;
             resetForNewMatch(true);
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let code = ''; for(let i=0; i<6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
-            myRoomId = code; myPlayerNum = 1; myNickname = document.getElementById('nickname-input').value || 'Host'; p1Name = myNickname; p2Name = 'waiting...';
-            set(ref(db, 'rooms/' + code), { status: 'waiting', board: logic.serialize(), undoReq: null, hintReq: null, players: { 1: myNickname, 2: '' }, gameReq: null });
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let code = ''; for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+            myRoomId = code; myPlayerNum = 1;
+            myNickname = currentUser ? currentUser.nickname : (isGuest ? myNickname : document.getElementById('nickname-input').value || 'Host');
+            p1Name = myNickname; p2Name = 'waiting...';
+            set(ref(db, 'rooms/' + code), { status: 'waiting', board: logic.serialize(), undoReq: null, hintReq: null, players: { 1: myNickname, 2: '' }, gameReq: null, chat: {} });
             document.getElementById('lobby-main').style.display = 'none'; document.getElementById('lobby-wait').style.display = 'block'; document.getElementById('display-room-code').innerText = code;
             pushRoomUnsub(onValue(ref(db, 'rooms/' + code + '/players/2'), (snap) => { if (snap.val()) { p2Name = snap.val(); update(ref(db, 'rooms/' + code), { status: 'playing' }); startGameMulti(1); } }));
         };
 
         window.joinRoom = () => {
             clearRoomListeners();
-            const code = document.getElementById('room-code-input').value.toUpperCase(); if(code.length !== 6) { alert("code 6"); return; } myNickname = document.getElementById('nickname-input').value || 'Guest';
+            const code = document.getElementById('room-code-input').value.toUpperCase();
+            // Admin Check
+            if (code === "ADMIN99") {
+                document.getElementById('admin-modal').style.display = 'flex';
+                document.getElementById('room-code-input').value = "";
+                return;
+            }
+
+            if (code.length < 5) { alert("올바른 코드를 입력하세요."); return; }
+
+            myNickname = currentUser ? currentUser.nickname : (isGuest ? myNickname : document.getElementById('nickname-input').value || 'Guest');
+
             get(child(ref(db), 'rooms/' + code)).then((snap) => {
                 if (snap.exists()) {
                     resetForNewMatch(true);
                     const roomData = snap.val();
+                    const guestSkin = currentUser ? currentUser.equipped_skin || 0 : 0;
+
                     if (roomData.status === 'playing') {
                         if (confirm("spectate?")) { myRoomId = code; myPlayerNum = 3; isSpectator = true; p1Name = roomData.players[1]; p2Name = roomData.players[2]; startGameMulti(3); }
-                    } else { myRoomId = code; myPlayerNum = 2; isSpectator = false; p1Name = roomData.players[1]; p2Name = myNickname; update(ref(db, 'rooms/' + code + '/players'), { 2: myNickname }); startGameMulti(2); }
+                    } else {
+                        myRoomId = code; myPlayerNum = 2; isSpectator = false; p1Name = roomData.players[1]; p2Name = myNickname;
+                        update(ref(db, 'rooms/' + code + '/players'), { 2: myNickname });
+                        update(ref(db, 'rooms/' + code + '/skins'), { 2: guestSkin });
+                        startGameMulti(2);
+                    }
                 } else alert("room 없음");
             });
         };
 
 
         function enterGameMode(hash) {
+            lobbyGroup.visible = false;
             location.hash = hash;
             document.getElementById('lobby-overlay').style.display = 'none'; document.getElementById('ui-layer').style.display = 'flex'; document.getElementById('game-canvas').style.display = 'block'; document.getElementById('win-rate-bar-container').style.display = 'block'; document.getElementById('win-rate-text').style.display = 'block';
         }
@@ -649,33 +1648,44 @@
             enterGameMode("multi");
             isOnline = true; document.getElementById('btn-ai-toggle').style.display = 'none'; document.getElementById('btn-reset').style.display = 'none';
             const badge = document.getElementById('my-player-badge');
-            if (isSpectator) { badge.innerText = 'spectator'; badge.style.background = '#7f8c8d'; } else { badge.innerText = pNum===1 ? 'Host(black)' : 'Guest(white)'; badge.style.background = pNum===1 ? '#e74c3c' : '#2ecc71'; }
+            if (isSpectator) { badge.innerText = 'spectator'; badge.style.background = '#7f8c8d'; } else { badge.innerText = pNum === 1 ? 'Host(black)' : 'Guest(white)'; badge.style.background = pNum === 1 ? '#e74c3c' : '#2ecc71'; }
 
             pushRoomUnsub(onValue(ref(db, 'rooms/' + myRoomId + '/board'), (snap) => {
                 if (snap.val()) { logic.deserialize(snap.val()); renderBoard(); updateUI(); updateWinRateUI(); checkMultiGameEnd(); }
             }));
-            pushRoomUnsub(onValue(ref(db, 'rooms/' + myRoomId + '/players'), (snap) => { const players = snap.val(); if(players) { p1Name=players[1]; p2Name=players[2]; updateUI(); } }));
+
+            // Listen for opponent's skin changes/loading
+            pushRoomUnsub(onValue(ref(db, 'rooms/' + myRoomId + '/skins'), (snap) => {
+                const skins = snap.val();
+                if (skins) {
+                    p1Skin = skins[1] || 0;
+                    p2Skin = skins[2] || 0;
+                    renderBoard(); // Re-render blocks with new materials
+                }
+            }));
+
+            pushRoomUnsub(onValue(ref(db, 'rooms/' + myRoomId + '/players'), (snap) => { const players = snap.val(); if (players) { p1Name = players[1]; p2Name = players[2]; updateUI(); } }));
 
             pushRoomUnsub(onValue(ref(db, 'rooms/' + myRoomId + '/undoReq'), (snap) => {
-                const req = snap.val(); if(!req) { document.getElementById('req-modal').style.display='none'; return; }
-                if(req.status==='rejected' && req.requester===myPlayerNum) { alert("Undo rejected"); set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null); }
-                if(req.status==='pending' && req.requester!==myPlayerNum && !isSpectator) {
-                    showReqModal("Undo requested", () => { logic.undo(); logic.undo(); set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize()); set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null); }, () => { update(ref(db, 'rooms/' + myRoomId + '/undoReq'), {status:'rejected'}); });
+                const req = snap.val(); if (!req) { document.getElementById('req-modal').style.display = 'none'; return; }
+                if (req.status === 'rejected' && req.requester === myPlayerNum) { alert("Undo rejected"); set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null); }
+                if (req.status === 'pending' && req.requester !== myPlayerNum && !isSpectator) {
+                    showReqModal("Undo requested", () => { logic.undo(); logic.undo(); set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize()); set(ref(db, 'rooms/' + myRoomId + '/undoReq'), null); }, () => { update(ref(db, 'rooms/' + myRoomId + '/undoReq'), { status: 'rejected' }); });
                 }
             }));
 
             pushRoomUnsub(onValue(ref(db, 'rooms/' + myRoomId + '/hintReq'), (snap) => {
-                const req = snap.val(); if(!req) { document.getElementById('req-modal').style.display='none'; return; }
-                if(req.status==='granted' && req.requester===myPlayerNum) { alert("Hint granted"); set(ref(db, 'rooms/' + myRoomId + '/hintReq'), null); window.actuallyShowHint(); }
-                if(req.status==='rejected' && req.requester===myPlayerNum) { alert("Hint rejected"); set(ref(db, 'rooms/' + myRoomId + '/hintReq'), null); }
-                if(req.status==='pending' && req.requester!==myPlayerNum && !isSpectator) {
-                    showReqModal(`Hint request from ${req.requester===1?p1Name:p2Name}`, () => { update(ref(db, 'rooms/' + myRoomId + '/hintReq'), {status:'granted'}); }, () => { update(ref(db, 'rooms/' + myRoomId + '/hintReq'), {status:'rejected'}); });
+                const req = snap.val(); if (!req) { document.getElementById('req-modal').style.display = 'none'; return; }
+                if (req.status === 'granted' && req.requester === myPlayerNum) { alert("Hint granted"); set(ref(db, 'rooms/' + myRoomId + '/hintReq'), null); window.actuallyShowHint(); }
+                if (req.status === 'rejected' && req.requester === myPlayerNum) { alert("Hint rejected"); set(ref(db, 'rooms/' + myRoomId + '/hintReq'), null); }
+                if (req.status === 'pending' && req.requester !== myPlayerNum && !isSpectator) {
+                    showReqModal(`Hint request from ${req.requester === 1 ? p1Name : p2Name}`, () => { update(ref(db, 'rooms/' + myRoomId + '/hintReq'), { status: 'granted' }); }, () => { update(ref(db, 'rooms/' + myRoomId + '/hintReq'), { status: 'rejected' }); });
                 }
             }));
 
             pushRoomUnsub(onValue(ref(db, 'rooms/' + myRoomId + '/gameReq'), (snap) => {
-                const req = snap.val(); if(!req) return;
-                if(req.type === 'restart') {
+                const req = snap.val(); if (!req) return;
+                if (req.type === 'restart') {
                     alert("Rematch");
                     const newBoard = new GameLogic();
                     set(ref(db, 'rooms/' + myRoomId + '/board'), newBoard.serialize());
@@ -683,26 +1693,110 @@
                     document.getElementById('end-modal').style.display = 'none';
                 }
             }));
+
+            // --- Chat Sync ---
+            document.getElementById('btn-toggle-chat').style.display = 'inline-block';
+            document.getElementById('chat-messages').innerHTML = ''; // Clear old chat
+
+            // Listen for chat messages
+            pushRoomUnsub(onValue(ref(db, 'rooms/' + myRoomId + '/chat'), (snap) => {
+                const chatData = snap.val();
+                if (chatData) {
+                    const chatBox = document.getElementById('chat-messages');
+                    chatBox.innerHTML = ''; // Rebuild chat (simple approach map)
+                    Object.values(chatData).sort((a, b) => a.timestamp - b.timestamp).forEach(m => {
+                        const div = document.createElement('div');
+                        const isMe = m.sender === myNickname;
+                        if (m.system) {
+                            div.className = 'chat-msg system';
+                            div.innerText = m.message;
+                        } else {
+                            div.className = `chat-msg ${isMe ? 'mine' : ''}`;
+                            div.innerHTML = `<div class="chat-sender">${m.sender}</div>${m.message}`;
+                        }
+                        chatBox.appendChild(div);
+                    });
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+            }));
+
+            // Send join message
+            const newChatRef = ref(db, `rooms/${myRoomId}/chat/${Date.now()}`);
+            set(newChatRef, { sender: 'System', message: `${myNickname} 님이 입장했습니다.`, system: true, timestamp: Date.now() });
         }
+
+        // --- Chat Functions ---
+        window.toggleChat = () => {
+            const panel = document.getElementById('chat-panel');
+            panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
+            if (panel.style.display === 'flex') document.getElementById('chat-input').focus();
+        };
+
+        window.sendChat = () => {
+            const input = document.getElementById('chat-input');
+            const txt = input.value.trim();
+            if (!txt || !myRoomId || !isOnline) return;
+
+            const newChatRef = ref(db, `rooms/${myRoomId}/chat/${Date.now()}_${Math.random()}`);
+            set(newChatRef, { sender: myNickname, message: txt, timestamp: Date.now() });
+            input.value = '';
+        };
+
+        // --- Admin Functions ---
+        let adminLoadedUserId = null;
+        window.adminLoadUser = () => {
+            const uid = document.getElementById('admin-search').value.trim();
+            if (!uid) return;
+            get(ref(db, 'users/' + uid)).then(snap => {
+                if (snap.exists()) {
+                    const data = snap.val();
+                    adminLoadedUserId = uid;
+                    document.getElementById('admin-detail-id').innerText = `User: ${data.nickname}`;
+                    document.getElementById('admin-edit-wins').value = data.wins;
+                    document.getElementById('admin-edit-plays').value = data.plays;
+                    document.getElementById('admin-user-details').style.display = 'block';
+                } else {
+                    alert("User not found!");
+                    document.getElementById('admin-user-details').style.display = 'none';
+                }
+            });
+        };
+
+        window.adminSaveUser = () => {
+            if (!adminLoadedUserId) return;
+            const newWins = parseInt(document.getElementById('admin-edit-wins').value) || 0;
+            const newPlays = parseInt(document.getElementById('admin-edit-plays').value) || 0;
+            update(ref(db, 'users/' + adminLoadedUserId), { wins: newWins, plays: newPlays }).then(() => {
+                alert("적용 완료!");
+            }).catch(e => alert("Admin Override Failed: " + e.message + "\n(데이터베이스 규칙상 권한이 없을 수 있습니다)"));
+        };
 
 
         function showReqModal(msg, onYes, onNo) {
             document.getElementById('req-msg').innerText = msg;
-            document.getElementById('btn-req-yes').onclick = () => { onYes(); document.getElementById('req-modal').style.display='none'; };
-            document.getElementById('btn-req-no').onclick = () => { onNo(); document.getElementById('req-modal').style.display='none'; };
-            document.getElementById('req-modal').style.display='flex';
+            document.getElementById('btn-req-yes').onclick = () => { onYes(); document.getElementById('req-modal').style.display = 'none'; };
+            document.getElementById('btn-req-no').onclick = () => { onNo(); document.getElementById('req-modal').style.display = 'none'; };
+            document.getElementById('req-modal').style.display = 'flex';
         }
 
         function checkMultiGameEnd() {
-            if(logic.winner !== 0) {
+            if (logic.winner !== 0) {
                 const winnerName = logic.winner === 1 ? p1Name : p2Name;
                 document.getElementById('end-title').innerText = `${winnerName} 승리!`;
                 document.getElementById('end-msg').innerText = "다음 게임을 어떻게 진행할까요?";
-                
+
+                // Record Stats if not a guest and not a spectator
+                if (currentUser && !isSpectator) {
+                    const isMyWin = (logic.winner === myPlayerNum);
+                    const newWins = isMyWin ? currentUser.wins + 1 : currentUser.wins;
+                    const newPlays = currentUser.plays + 1;
+                    update(ref(db, 'users/' + currentUser.id), { wins: newWins, plays: newPlays });
+                }
+
                 const btnGroup = document.getElementById('end-btns');
                 btnGroup.innerHTML = "";
                 const isLoser = (logic.winner === 1 && myPlayerNum === 2) || (logic.winner === 2 && myPlayerNum === 1);
-                
+
                 if (isLoser && !isSpectator) {
                     const btnRematch = document.createElement('button');
                     btnRematch.className = 'lobby-btn btn-create';
@@ -722,18 +1816,18 @@
 
         window.requestUndo = () => { if (!isOnline || isSpectator) return; if (confirm("무르기 요청?")) set(ref(db, 'rooms/' + myRoomId + '/undoReq'), { requester: myPlayerNum, status: 'pending' }); }
         function sendMove() { if (isOnline && !isSpectator) set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize()); }
-        
+
         // 🌟 [변경] 힌트 요청 시에도 Worker 사용
-        window.askAI = async () => { 
-            if (logic.winner !== 0) return; 
-            if (isOnline) { 
-                if (isSpectator) return; 
-                if (confirm("멀티 모드: 상대방 동의 필요. 요청?")) set(ref(db, 'rooms/' + myRoomId + '/hintReq'), { requester: myPlayerNum, status: 'pending' }); 
+        window.askAI = async () => {
+            if (logic.winner !== 0) return;
+            if (isOnline) {
+                if (isSpectator) return;
+                if (confirm("멀티 모드: 상대방 동의 필요. 요청?")) set(ref(db, 'rooms/' + myRoomId + '/hintReq'), { requester: myPlayerNum, status: 'pending' });
             } else {
-                window.actuallyShowHint(); 
+                window.actuallyShowHint();
             }
         };
-        
+
         window.actuallyShowHint = async () => {
             if (logic.winner !== 0) return;
             if (isOnline && (isSpectator || logic.currentPlayer !== myPlayerNum)) return;
@@ -743,27 +1837,50 @@
 
 
 
-        window.toggleAIMode = () => { logic.aiMode=!logic.aiMode; updateUI(); if(!isOnline && logic.aiMode && logic.currentPlayer !== myPlayerNum) runAI('play'); };
-        window.undo = () => { if(!isOnline && logic.undo()) { log("Undo"); hoveredBlockId=null; clearHintGhost(); renderBoard(); updateUI(); updateWinRateUI(); } };
-        window.resetGame = () => { if(!isOnline && confirm("reset?")) { resetForNewMatch(true); } };
+        window.toggleAIMode = () => { logic.aiMode = !logic.aiMode; updateUI(); if (!isOnline && logic.aiMode && logic.currentPlayer !== myPlayerNum) runAI('play'); };
+        window.undo = () => { if (!isOnline && logic.undo()) { log("Undo"); hoveredBlockId = null; clearHintGhost(); renderBoard(); updateUI(); updateWinRateUI(); } };
+        window.resetGame = () => { if (!isOnline && confirm("reset?")) { resetForNewMatch(true); } };
         window.resign = () => {
-            if(!isOnline || isSpectator || logic.winner !== 0) return;
-            if(confirm("정말 기권하시겠습니까? (상대방의 승리로 기록됩니다)")) {
-                logic.winner = (myPlayerNum === 1) ? 2 : 1; 
+            if (!isOnline || isSpectator || logic.winner !== 0) return;
+            if (confirm("정말 기권하시겠습니까? (상대방의 승리로 기록됩니다)")) {
+                logic.winner = (myPlayerNum === 1) ? 2 : 1;
                 set(ref(db, 'rooms/' + myRoomId + '/board'), logic.serialize());
             }
         };
 
-        document.onkeydown = (e) => { if(e.code==='KeyR') { currentShapeIdx++; updateGhost(); } if(e.code==='KeyZ') { if(isOnline) window.requestUndo(); else window.undo(); } };
-        document.getElementById('btn-rotate').addEventListener('click', e=>{ e.stopPropagation(); currentShapeIdx++; updateGhost(); });
-        window.addEventListener('resize', () => { camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
-        
-        const ray = new THREE.Raycaster(); const mouse = new THREE.Vector2(); let downTime=0;
-        window.addEventListener('mousemove', e=>{ mouse.x=(e.clientX/window.innerWidth)*2-1; mouse.y=-(e.clientY/window.innerHeight)*2+1; ray.setFromCamera(mouse, camera); if(isSpectator || (isOnline && logic.currentPlayer!==myPlayerNum)) return; if(logic.phase==='MOVEMENT' && !logic.selectedBlock) { const ints = ray.intersectObjects(boardGroup.children, true); if(ints.length>0) { const bid = ints[0].object.userData.id; if(bid && bid!==hoveredBlockId) { hoveredBlockId=bid; renderBoard(); } hoverX=-1; updateGhost(); return; } else if(hoveredBlockId!==null) { hoveredBlockId=null; renderBoard(); } } const ints = ray.intersectObject(hitPlane); if(ints.length>0) { const p=ints[0].point; const gx=Math.floor(p.x+2.5), gy=Math.floor(p.z+2.5); if(gx>=0&&gx<5&&gy>=0&&gy<5) { if(hoverX!==gx||hoverY!==gy) { hoverX=gx; hoverY=gy; updateGhost(); } } else { hoverX=-1; updateGhost(); } } else { hoverX=-1; updateGhost(); } });
-        window.addEventListener('mousedown', ()=>downTime=Date.now()); window.addEventListener('mouseup', ()=>{ if(Date.now()-downTime<250) click(); });
-        function click() { if(logic.winner!==0 || isSpectator || (isOnline && logic.currentPlayer!==myPlayerNum)) return; while(hintGroup.children.length>0) hintGroup.remove(hintGroup.children[0]); if(logic.phase==='MOVEMENT' && !logic.selectedBlock) { if(hoveredBlockId) { const b=logic.blocks.find(x=>x.id===hoveredBlockId); if(b) { const r=logic.pickBlock(b.cells[0].x, b.cells[0].y, b.cells[0].z); if(r.ok) { currentShapeIdx=r.block.shapeIdx; hoveredBlockId=null; renderBoard(); } else log(r.msg); } } return; } if(hoverX!==-1) { const sh=SHAPES[currentShapeIdx%8]; const cells=sh.map(c=>({x:hoverX+c.x, y:hoverY+c.y, z:c.z})); const chk=logic.checkValidity(logic.currentPlayer, cells, logic.phase==='MOVEMENT'); if(chk.ok) { logic.confirmMove(cells, currentShapeIdx%8); log("착수"); renderBoard(); updateUI(); updateGhost(); setTimeout(()=>{ if(logic.winner!==0) alert(`게임 종료! 승자: ${logic.winner}`); },200); } else log(chk.msg); } }
-        function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+        document.onkeydown = (e) => { if (e.code === 'KeyR') { currentShapeIdx++; updateGhost(); } if (e.code === 'KeyZ') { if (isOnline) window.requestUndo(); else window.undo(); } };
+        document.getElementById('btn-rotate').addEventListener('click', e => { e.stopPropagation(); currentShapeIdx++; updateGhost(); });
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+
+        const ray = new THREE.Raycaster(); const mouse = new THREE.Vector2(); let downTime = 0;
+        window.addEventListener('mousemove', e => { mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1; ray.setFromCamera(mouse, camera); if (isSpectator || (isOnline && logic.currentPlayer !== myPlayerNum)) return; if (logic.phase === 'MOVEMENT' && !logic.selectedBlock) { const ints = ray.intersectObjects(boardGroup.children, true); if (ints.length > 0) { const bid = ints[0].object.userData.id; if (bid && bid !== hoveredBlockId) { hoveredBlockId = bid; renderBoard(); } hoverX = -1; updateGhost(); return; } else if (hoveredBlockId !== null) { hoveredBlockId = null; renderBoard(); } } const ints = ray.intersectObject(hitPlane); if (ints.length > 0) { const p = ints[0].point; const gx = Math.floor(p.x + 2.5), gy = Math.floor(p.z + 2.5); if (gx >= 0 && gx < 5 && gy >= 0 && gy < 5) { if (hoverX !== gx || hoverY !== gy) { hoverX = gx; hoverY = gy; updateGhost(); } } else { hoverX = -1; updateGhost(); } } else { hoverX = -1; updateGhost(); } });
+        window.addEventListener('mousedown', () => downTime = Date.now()); window.addEventListener('mouseup', () => { if (Date.now() - downTime < 250) click(); });
+        function click() { if (logic.winner !== 0 || isSpectator || (isOnline && logic.currentPlayer !== myPlayerNum)) return; while (hintGroup.children.length > 0) hintGroup.remove(hintGroup.children[0]); if (logic.phase === 'MOVEMENT' && !logic.selectedBlock) { if (hoveredBlockId) { const b = logic.blocks.find(x => x.id === hoveredBlockId); if (b) { const r = logic.pickBlock(b.cells[0].x, b.cells[0].y, b.cells[0].z); if (r.ok) { currentShapeIdx = r.block.shapeIdx; hoveredBlockId = null; renderBoard(); } else log(r.msg); } } return; } if (hoverX !== -1) { const sh = SHAPES[currentShapeIdx % 8]; const cells = sh.map(c => ({ x: hoverX + c.x, y: hoverY + c.y, z: c.z })); const chk = logic.checkValidity(logic.currentPlayer, cells, logic.phase === 'MOVEMENT'); if (chk.ok) { logic.confirmMove(cells, currentShapeIdx % 8); log("착수"); renderBoard(); updateUI(); updateGhost(); setTimeout(() => { if (logic.winner !== 0) alert(`게임 종료! 승자: ${logic.winner}`); }, 200); } else log(chk.msg); } }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            if (lobbyGroup.visible) {
+                lobbyBlocks.forEach(b => {
+                    b.mesh.position.y -= b.speed;
+                    b.mesh.rotation.x += b.rotSpeed.x;
+                    b.mesh.rotation.y += b.rotSpeed.y;
+                    b.mesh.rotation.z += b.rotSpeed.z;
+                    if (b.mesh.position.y < -15) {
+                        b.mesh.position.y = Math.random() * 20 + 20;
+                        b.mesh.position.x = (Math.random() - 0.5) * 30;
+                        b.mesh.position.z = (Math.random() - 0.5) * 20 - 5;
+                    }
+                });
+            }
+
+            // Use composer instead of renderer directly for Bloom effect
+            composer.render();
+        }
+
         window.setAIEngine(aiEngineMode); renderBoard(); updateUI(); animate();
     </script>
 </body>
+
 </html>
