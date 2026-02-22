@@ -1150,86 +1150,99 @@
             { id: 3, name: "메탈", icon: "⚙️", reqWins: 10, reqPlays: 0 }
         ];
 
-        // 유리에 테두리 라인을 그리는 텍스처 (마인크래프트 느낌)
+        // 1. 유리에 테두리 라인을 그리는 텍스처 (16x16 도트 감성 완벽 구현)
         function createMinecraftGlassTexture() {
             const canvas = document.createElement('canvas');
-            canvas.width = 64; canvas.height = 64;
+            canvas.width = 16; canvas.height = 16; // 픽셀 아트 규격
             const context = canvas.getContext('2d');
-            context.fillStyle = 'rgba(255,255,255,0.0)';
-            context.fillRect(0, 0, 64, 64);
-            context.strokeStyle = 'rgba(255,255,255,0.4)';
-            context.lineWidth = 4;
-            context.strokeRect(2, 2, 60, 60);
-            context.fillStyle = 'rgba(255,255,255,0.2)';
-            context.fillRect(8, 8, 12, 12); // 반사 하이라이트 느낌
+
+            // 전체 투명 초기화
+            context.clearRect(0, 0, 16, 16);
+
+            // 외곽선 (테두리 1픽셀)
+            context.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 재질의 color로 틴팅하기 위해 흰색 사용
+            context.fillRect(0, 0, 16, 1);
+            context.fillRect(0, 15, 16, 1);
+            context.fillRect(0, 0, 1, 16);
+            context.fillRect(15, 0, 1, 16);
+
+            // 대각선 반사 하이라이트 도트
+            context.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            context.fillRect(2, 2, 3, 1);
+            context.fillRect(2, 3, 1, 1);
+            context.fillRect(11, 12, 3, 1);
+            context.fillRect(13, 11, 1, 1);
+
             const tex = new THREE.CanvasTexture(canvas);
-            tex.magFilter = THREE.NearestFilter; // 픽셀 느낌
+            tex.magFilter = THREE.NearestFilter; // 도트 깨짐 유지 (안티앨리어싱 X)
+            tex.minFilter = THREE.NearestFilter;
             return tex;
         }
 
-        function getSkinAssets(skinIndex, isP1, isHover) {
-            // isP1: true면 흑돌, false면 백돌
-            let mat, maxGeo;
-            const size = 0.96; // 기본 블록 크기
+        // 텍스처 인스턴스를 미리 생성하여 재사용 (성능 최적화)
+        const glassTexture = createMinecraftGlassTexture();
 
-            // 공통 지오메트리
+        function getSkinAssets(skinIndex, isP1, isHover) {
+            let mat, maxGeo;
+            const size = 0.96;
+
+            // 공통 지오메트리: 크리스탈도 이제 블록 형태를 유지합니다.
             const roundedGeo = new RoundedBoxGeometry(size, size, size, 4, 0.1);
-            const boxGeo = new THREE.BoxGeometry(size, size, size); // 마인크래프트 같은 직육면체
-            // 뾰족한 크리스탈 느낌의 지오메트리 (Icosahedron)
-            const crystalGeo = new THREE.IcosahedronGeometry(size * 0.6, 0);
+            const boxGeo = new THREE.BoxGeometry(size, size, size); // 완벽한 직육면체
 
             switch (skinIndex) {
                 case 1:
-                    // 1단계: 마인크래프트풍 큐브 유리
+                    // 1단계: 마인크래프트 큐브 유리 (사진 참고)
                     mat = new THREE.MeshPhysicalMaterial({
-                        color: isP1 ? 0x111111 : 0xdddddd, // 내부 불투명도에 맞춰 베이스 색상 조정
-                        metalness: 0.1,
-                        roughness: isHover ? 0.05 : 0.2, // 완전히 투명하기보다 반투명한 질감 강조
-                        transmission: 0.5, // 0.85 -> 0.5 (투과율을 대폭 낮춰 불투명하게 만듦)
-                        thickness: 1.5,
-                        ior: 2.0, // 빛의 산란 높임
+                        color: isP1 ? 0x555555 : 0xd0e8f0, // 흑유리는 짙은 회색, 백유리는 투명한 얼음색
+                        roughness: 0.1,
+                        transmission: 0.9, // 내부를 맑게 투과
                         transparent: true,
-                        opacity: 0.8, // 자체적인 불투명도(Opacity) 추가
-                        map: createMinecraftGlassTexture() // 외곽선 텍스처
+                        map: glassTexture, // 도트 테두리 적용
+                        alphaMap: glassTexture, // 테두리 부분만 불투명하게, 내부는 투명하게 처리
+                        alphaTest: 0.1
                     });
-                    maxGeo = boxGeo;
+                    maxGeo = boxGeo; // 각진 큐브 형태 유지
                     break;
 
                 case 2:
-                    // 2단계: 뾰족한 각진 크리스탈
+                    // 2단계: 크리스탈 (3번째 사진의 다듬어진 보석 블록 렌퍼런스)
                     mat = new THREE.MeshPhysicalMaterial({
-                        color: isP1 ? 0x111111 : 0xa0a0a0,
-                        metalness: 0.3,
-                        roughness: 0.05,
-                        transmission: 0.9,
-                        thickness: 1.5,
-                        ior: 2.4,
-                        emissive: isP1 ? 0x330000 : 0x002233, // 백돌 크리스탈도 호버 시 은은한 푸른/하얀 빛
-                        emissiveIntensity: isHover ? 0.5 : 0.0,
-                        flatShading: true // 표면의 각진 느낌을 살림
+                        color: isP1 ? 0x220033 : 0xffffff, // 흑돌은 깊은 자수정/흑요석 느낌, 백돌은 순백의 석영
+                        metalness: 0.1,
+                        roughness: isHover ? 0.0 : 0.05, // 매우 매끄러운 표면
+                        transmission: 0.95, // 극강의 투명도
+                        ior: 2.2, // 보석 수준의 높은 빛 굴절률
+                        thickness: 2.0, // 빛이 통과하며 왜곡되는 두께감
+                        clearcoat: 1.0, // 표면 에폭시/유리 코팅 느낌
+                        emissive: isP1 ? 0x110011 : 0x112233, // 내부에서 우러나오는 색상
+                        emissiveIntensity: isHover ? 0.6 : 0.2
                     });
-                    maxGeo = crystalGeo;
+                    maxGeo = roundedGeo; // 둥글게 세공된 블록 형태
                     break;
 
                 case 3:
                     // 3단계: 메탈
                     mat = new THREE.MeshStandardMaterial({
-                        color: isP1 ? 0x333333 : 0x999999, // 백금 느낌을 위해 100% 흰색 대신 연한 은회색
+                        // 흑돌: 건메탈(약간 푸른빛 도는 짙은 금속). 일반 검정 블록과 확실히 구분됨.
+                        // 백돌: 빛 반사를 줄인 탁한 은/백금 느낌.
+                        color: isP1 ? 0x2b2b36 : 0xcccccc,
                         metalness: 1.0,
-                        roughness: isHover ? 0.1 : 0.3,
-                        envMapIntensity: 1.5
+                        // 백돌의 상단 반사광 블로우아웃 방지를 위해 거칠기를 약간 줌
+                        roughness: isHover ? 0.2 : 0.4,
+                        envMapIntensity: 0.8 // 환경 반사율을 낮춰서 과도한 번쩍임 제어
                     });
                     maxGeo = roundedGeo;
                     break;
 
                 case 0:
                 default:
-                    // 0단계: 기본
+                    // 0단계: 기본 플라스틱/돌
                     mat = new THREE.MeshStandardMaterial({
-                        color: isP1 ? 0x1a1a1a : 0xb0b0b0, // 백돌의 기본 색상을 너무 밝지 않은 회색톤으로 낮춤 (환경맵 반사로 인해 렌더링시 하얗게 보임)
-                        roughness: 0.6, // 거칠기를 높여서 빛 반사를 더 분산시킴
-                        metalness: 0.05,
-                        emissive: isHover ? (isP1 ? 0x333333 : 0x222222) : 0x000000
+                        color: isP1 ? 0x1a1a1a : 0xb0b0b0,
+                        roughness: 0.7, // 거칠기를 줘서 메탈 스킨(매끄러움)과 확실히 대비시킴
+                        metalness: 0.0,
+                        emissive: isHover ? (isP1 ? 0x222222 : 0x111111) : 0x000000
                     });
                     maxGeo = roundedGeo;
                     break;
