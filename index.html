@@ -1146,7 +1146,7 @@
         const SKIN_CONFIGS = [
             { id: 0, name: "기본", icon: "⚫", reqWins: 0, reqPlays: 0 },
             { id: 1, name: "유리", icon: "🧊", reqWins: 0, reqPlays: 5 },
-            { id: 2, name: "크리스탈", icon: "💎", reqWins: 3, reqPlays: 0 },
+            { id: 2, name: "물음표", icon: "❓", reqWins: 3, reqPlays: 0 }, // 크리스탈 대신 물음표로 변경
             { id: 3, name: "메탈", icon: "⚙️", reqWins: 10, reqPlays: 0 }
         ];
 
@@ -1182,55 +1182,109 @@
         // 텍스처 인스턴스를 미리 생성하여 재사용 (성능 최적화)
         const glassTexture = createMinecraftGlassTexture();
 
+        // 2. 물음표 블록용 텍스처 (사진 속 디테일 구현)
+        function createQuestionMap(isP1) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            // 블록 배경색 (흑돌은 딥블랙, 백돌은 살짝 톤다운된 화이트)
+            ctx.fillStyle = isP1 ? '#0a0a0a' : '#f0f0f0';
+            ctx.fillRect(0, 0, 512, 512);
+
+            // 내부 테두리 음각 느낌
+            ctx.strokeStyle = isP1 ? '#222222' : '#e0e0e0';
+            ctx.lineWidth = 12;
+            ctx.strokeRect(24, 24, 464, 464);
+
+            // 모서리 리벳(나사) 디테일
+            const drawRivet = (x, y) => {
+                ctx.beginPath();
+                ctx.arc(x, y, 16, 0, Math.PI * 2);
+                ctx.fillStyle = isP1 ? '#1a1a1a' : '#e8e8e8';
+                ctx.fill();
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = isP1 ? '#000000' : '#cccccc';
+                ctx.stroke();
+            };
+            const offset = 56;
+            drawRivet(offset, offset);
+            drawRivet(512 - offset, offset);
+            drawRivet(offset, 512 - offset);
+            drawRivet(512 - offset, 512 - offset);
+
+            // 물음표 텍스트
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = 'bold 260px "Arial Black", Impact, sans-serif';
+
+            if (isP1) {
+                // 흑돌: 검은 배경에 대비되는 뚜렷한 흰색 물음표
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText('?', 256, 280);
+            } else {
+                // 백돌: 양각/음각 느낌을 내기 위해 그림자 활용
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+                ctx.shadowBlur = 8;
+                ctx.shadowOffsetX = 4;
+                ctx.shadowOffsetY = 4;
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText('?', 256, 280);
+                ctx.shadowColor = 'transparent'; // 그림자 리셋
+
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#dddddd';
+                ctx.strokeText('?', 256, 280);
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.anisotropy = 16; // 텍스처 퀄리티(선명도) 향상
+            return tex;
+        }
+
+        const qMapBlack = createQuestionMap(true);
+        const qMapWhite = createQuestionMap(false);
+
         function getSkinAssets(skinIndex, isP1, isHover) {
             let mat, maxGeo;
             const size = 0.96;
-
-            // 공통 지오메트리: 크리스탈도 이제 블록 형태를 유지합니다.
             const roundedGeo = new RoundedBoxGeometry(size, size, size, 4, 0.1);
-            const boxGeo = new THREE.BoxGeometry(size, size, size); // 완벽한 직육면체
+            const boxGeo = new THREE.BoxGeometry(size, size, size);
 
             switch (skinIndex) {
                 case 1:
-                    // 1단계: 마인크래프트 큐브 유리 (사진 참고)
+                    // 1단계: 마인크래프트풍 유리 (기존 완벽했던 설정 유지)
                     mat = new THREE.MeshPhysicalMaterial({
-                        color: isP1 ? 0x555555 : 0xd0e8f0, // 흑유리는 짙은 회색, 백유리는 투명한 얼음색
+                        color: isP1 ? 0x555555 : 0xd0e8f0,
                         roughness: 0.1,
-                        transmission: 0.9, // 내부를 맑게 투과
+                        transmission: 0.9,
                         transparent: true,
-                        map: glassTexture, // 도트 테두리 적용
-                        alphaMap: glassTexture, // 테두리 부분만 불투명하게, 내부는 투명하게 처리
+                        map: glassTexture,
+                        alphaMap: glassTexture,
                         alphaTest: 0.1
                     });
-                    maxGeo = boxGeo; // 각진 큐브 형태 유지
+                    maxGeo = boxGeo;
                     break;
 
                 case 2:
-                    // 2단계: 크리스탈 (3번째 사진의 다듬어진 보석 블록 렌퍼런스)
-                    mat = new THREE.MeshPhysicalMaterial({
-                        color: isP1 ? 0x220033 : 0xffffff, // 흑돌은 깊은 자수정/흑요석 느낌, 백돌은 순백의 석영
-                        metalness: 0.1,
-                        roughness: isHover ? 0.0 : 0.05, // 매우 매끄러운 표면
-                        transmission: 0.95, // 극강의 투명도
-                        ior: 2.2, // 보석 수준의 높은 빛 굴절률
-                        thickness: 2.0, // 빛이 통과하며 왜곡되는 두께감
-                        clearcoat: 1.0, // 표면 에폭시/유리 코팅 느낌
-                        emissive: isP1 ? 0x110011 : 0x112233, // 내부에서 우러나오는 색상
-                        emissiveIntensity: isHover ? 0.6 : 0.2
+                    // 2단계: 물음표 블록 (사진 참고)
+                    mat = new THREE.MeshStandardMaterial({
+                        map: isP1 ? qMapBlack : qMapWhite,
+                        roughness: 0.15, // 사진처럼 빤딱빤딱한 에나멜/플라스틱 코팅 질감
+                        metalness: 0.1,  // 약간의 반사광만 허용
+                        emissive: isHover ? (isP1 ? 0x222222 : 0x111111) : 0x000000 // 호버 시 미세하게 밝아짐
                     });
-                    maxGeo = roundedGeo; // 둥글게 세공된 블록 형태
+                    maxGeo = roundedGeo;
                     break;
 
                 case 3:
-                    // 3단계: 메탈
+                    // 3단계: 메탈 (환경맵 없이도 금속 느낌이 나도록 수정)
                     mat = new THREE.MeshStandardMaterial({
-                        // 흑돌: 건메탈(약간 푸른빛 도는 짙은 금속). 일반 검정 블록과 확실히 구분됨.
-                        // 백돌: 빛 반사를 줄인 탁한 은/백금 느낌.
-                        color: isP1 ? 0x2b2b36 : 0xcccccc,
-                        metalness: 1.0,
-                        // 백돌의 상단 반사광 블로우아웃 방지를 위해 거칠기를 약간 줌
-                        roughness: isHover ? 0.2 : 0.4,
-                        envMapIntensity: 0.8 // 환경 반사율을 낮춰서 과도한 번쩍임 제어
+                        // 흑돌 베이스 컬러를 완전 검정에서 밝혀서 빛을 반사할 수 있게 만듦
+                        color: isP1 ? 0x4a4a52 : 0xcccccc,
+                        metalness: 0.6, // 1.0에서 낮춤 (일반 조명에서 시커멓게 타는 현상 방지)
+                        roughness: isHover ? 0.2 : 0.35,
                     });
                     maxGeo = roundedGeo;
                     break;
