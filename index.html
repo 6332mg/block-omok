@@ -1789,10 +1789,6 @@
                 b.cells.forEach(c => {
                     const m = new THREE.Mesh(assets.geometry, assets.material);
                     m.position.set(c.x - 2, c.z + 0.5, c.y - 2);
-                    if (skinIdx === 2) {
-                        // 크리스탈 뾰족한 모양을 랜덤하게 회전시켜 더 불규칙하게
-                        m.rotation.set(Math.random(), Math.random(), Math.random());
-                    }
                     m.castShadow = true; m.receiveShadow = true; m.userData = { id: b.id, parentGroup: grp }; grp.add(m);
                 });
 
@@ -1840,9 +1836,6 @@
             cells.forEach(c => {
                 const m = new THREE.Mesh(geo, mat);
                 m.position.set(c.x - 2, c.z + 0.52, c.y - 2);
-                if (isCrystal) {
-                    m.rotation.set(Math.random(), Math.random(), Math.random());
-                }
                 grp.add(m);
             });
         }
