@@ -1279,14 +1279,19 @@
                     break;
 
                 case 3:
-                    // 3단계: 메탈 (환경맵 없이도 금속 느낌이 나도록 수정)
+                    // 3단계: 매트한 메탈 (무광 알루미늄/흑철 느낌)
+
+                    // 메탈 전용 기하학: 기존 0.1보다 훨씬 날카로운 0.02의 모서리 반경을 줘서 CNC로 깎은 듯한 금속 느낌 부여
+                    const metalGeo = new RoundedBoxGeometry(size, size, size, 2, 0.02);
+
                     mat = new THREE.MeshStandardMaterial({
-                        // 흑돌 베이스 컬러를 완전 검정에서 밝혀서 빛을 반사할 수 있게 만듦
-                        color: isP1 ? 0x4a4a52 : 0xcccccc,
-                        metalness: 0.6, // 1.0에서 낮춤 (일반 조명에서 시커멓게 타는 현상 방지)
-                        roughness: isHover ? 0.2 : 0.35,
+                        color: isP1 ? 0x5a5a62 : 0xc0c0c0, // 흑철색과 무광 알루미늄 색상
+                        metalness: 0.85, // 1.0 대신 살짝 낮춰서 극단적인 반사와 눈부심 방지
+                        roughness: isHover ? 0.35 : 0.5, // 거칠기를 높여 매트한 질감 형성 (빛이 부드럽게 퍼짐)
+                        envMapIntensity: 1.2, // 환경광을 적당히만 반사하도록 조절
+                        emissive: isHover ? (isP1 ? 0x222222 : 0x111111) : 0x000000
                     });
-                    maxGeo = roundedGeo;
+                    maxGeo = metalGeo; // 메탈 모드에만 특별히 날카로운 지오메트리 적용
                     break;
 
                 case 0:
@@ -1301,7 +1306,7 @@
                     maxGeo = roundedGeo;
                     break;
             }
-            return { material: mat, geometry: maxGeo, isConnecting: skinIndex === 0 || skinIndex === 3 || skinIndex === 1 };
+            return { material: mat, geometry: maxGeo, isConnecting: skinIndex === 0 || skinIndex === 1 || skinIndex === 2 || skinIndex === 3 };
         }
 
         // --- Account System Variables ---
@@ -1798,9 +1803,16 @@
                             const c1 = b.cells[i], c2 = b.cells[j];
                             if (Math.abs(c1.x - c2.x) + Math.abs(c1.y - c2.y) + Math.abs(c1.z - c2.z) === 1) {
                                 let bg;
-                                if (Math.abs(c1.x - c2.x) === 1) bg = new THREE.BoxGeometry(1, 0.8, 0.8);
-                                else if (Math.abs(c1.y - c2.y) === 1) bg = new THREE.BoxGeometry(0.8, 0.8, 1);
-                                else bg = new THREE.BoxGeometry(0.8, 1, 0.8);
+                                if (skinIdx === 3) {
+                                    // 메탈 프레임/파이프 모양으로 얇게
+                                    if (Math.abs(c1.x - c2.x) === 1) bg = new THREE.BoxGeometry(1, 0.2, 0.2);
+                                    else if (Math.abs(c1.y - c2.y) === 1) bg = new THREE.BoxGeometry(0.2, 0.2, 1);
+                                    else bg = new THREE.BoxGeometry(0.2, 1, 0.2);
+                                } else {
+                                    if (Math.abs(c1.x - c2.x) === 1) bg = new THREE.BoxGeometry(1, 0.8, 0.8);
+                                    else if (Math.abs(c1.y - c2.y) === 1) bg = new THREE.BoxGeometry(0.8, 0.8, 1);
+                                    else bg = new THREE.BoxGeometry(0.8, 1, 0.8);
+                                }
                                 const br = new THREE.Mesh(bg, assets.material);
                                 br.position.set((c1.x + c2.x) / 2 - 2, (c1.z + c2.z) / 2 + 0.5, (c1.y + c2.y) / 2 - 2);
                                 grp.add(br);
